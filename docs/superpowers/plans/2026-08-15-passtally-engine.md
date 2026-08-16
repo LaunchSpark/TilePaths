@@ -1909,8 +1909,7 @@ git commit -m "feat: game construction, marker setup, and two-action turns"
 
 ```python
 from passtally.game import Game
-from passtally.placement import can_place
-from passtally.tile_types import distinct_orientations, offset_of
+from passtally.tile_types import distinct_orientations
 from passtally.types import MoveMarker, PlaceTile
 
 
@@ -1928,18 +1927,31 @@ def test_every_generated_move_is_accepted_by_apply():
         game.clone().apply(move)
 
 
-def test_place_move_count_matches_the_footprint_maths():
-    game = _setup()
-    expected = 0
-    for pile in game.piles:
-        for orientation in distinct_orientations(pile.face_up):
-            dr, dc = offset_of(orientation)
-            for r in range(game.board.n):
-                for c in range(game.board.n):
-                    if can_place(game.board, (r, c), (r + dr, c + dc)):
-                        expected += 1
+def test_place_move_count_on_an_empty_board():
+    """Every orientation has exactly n*(n-1) footprints on an empty board.
+
+    On 6x6 that is 30, so a 4-orientation tile yields 120 placements and a
+    2-orientation tile yields 60. These are fixed numbers on purpose -- deriving
+    the expected count by re-running legal_moves' own loop would pass even if
+    that loop were wrong.
+    """
+    game = _setup(board_size=6)
     places = [m for m in game.legal_moves() if isinstance(m, PlaceTile)]
-    assert len(places) == expected
+
+    for index, pile in enumerate(game.piles):
+        for orientation in distinct_orientations(pile.face_up):
+            matching = [
+                m for m in places
+                if m.pile_index == index and m.orientation == orientation
+            ]
+            assert len(matching) == 30
+
+        count = sum(1 for m in places if m.pile_index == index)
+        assert count == (120 if len(distinct_orientations(pile.face_up)) == 4 else 60)
+
+    assert len(places) == sum(
+        120 if len(distinct_orientations(p.face_up)) == 4 else 60 for p in game.piles
+    )
 
 
 def test_symmetric_tiles_generate_no_duplicate_placements():
