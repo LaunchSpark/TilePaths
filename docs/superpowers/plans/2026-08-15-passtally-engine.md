@@ -1922,6 +1922,7 @@ git commit -m "feat: game construction, marker setup, and two-action turns"
 `tests/test_legal_moves.py`:
 
 ```python
+from passtally import config
 from passtally.game import Game
 from passtally.tile_types import distinct_orientations
 from passtally.types import MoveMarker, PlaceTile
@@ -1991,10 +1992,31 @@ def test_marker_moves_are_generated_for_every_marker():
 
 
 def test_marker_moves_reaching_the_same_slot_are_deduped():
+    """+1 and -1 land on the same slot only when the ring is saturated.
+
+    For a fixed direction, |distance| 2 always needs strictly more empty slots
+    than |distance| 1 along the same forward scan, so same-direction landings
+    can never coincide -- a collision needs the forward and backward scans to
+    converge, which requires leaving exactly one slot empty besides the
+    marker's own. With more room than that, the two scans just find different
+    slots and this test would pass whether or not the dedupe worked. Do not
+    "simplify" this back to a lightly-occupied ring.
+    """
     game = _setup(board_size=6)
     marker = game.players[0].marker_slots[0]
-    for offset in (1, 2, 3, 4):
-        game.board.ring[(marker + offset) % 24].occupant = 90 + offset
+
+    # Occupy every other empty slot on the ring, leaving exactly one (target)
+    # free. Both the forward (+1) and backward (-1) scans must then land on
+    # that single free slot, while +-2 find no second free slot and are None.
+    empty_slots = [
+        slot
+        for slot in range(len(game.board.ring))
+        if slot != marker and game.board.ring[slot].occupant is None
+    ]
+    target, *fill = empty_slots
+    for index, slot in enumerate(fill):
+        game.board.ring[slot].occupant = 900 + index
+
     markers = [
         m
         for m in game.legal_moves()
@@ -2004,6 +2026,10 @@ def test_marker_moves_reaching_the_same_slot_are_deduped():
 
     destinations = [marker_destination(game.board, marker, m.distance) for m in markers]
     assert len(destinations) == len(set(destinations))
+    # The point of the exercise: without the dedupe, +1 and -1 would both
+    # reach `target` and appear as two separate moves.
+    assert len(markers) == 1
+    assert len(markers) < len(config.MARKER_DISTANCES)
 
 
 def test_no_place_moves_when_every_pile_is_empty():
