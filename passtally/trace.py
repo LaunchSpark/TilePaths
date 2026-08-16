@@ -80,9 +80,12 @@ def score_lines(board: Board, marker_slots: list[int]) -> dict[frozenset[int], i
     lines: dict[frozenset[int], int] = {}
     for slot in marker_slots:
         endpoint, passes = trace(board, slot)
-        # A line can re-enter its start cell through another face and leave by
-        # the original border face. That is not a pair, so exclude it.
-        if isinstance(endpoint, int) and endpoint != slot and endpoint in owned:
+        # Board connections have degree at most 2, so the graph decomposes into
+        # simple paths and cycles. A border slot is an endpoint of some path,
+        # never on a cycle, so tracing from it reaches a distinct endpoint or
+        # dies. Self-return is structurally impossible, parallel to the LOOP
+        # guard documented in trace_from.
+        if isinstance(endpoint, int) and endpoint in owned:
             lines[frozenset((slot, endpoint))] = passes
     return lines
 

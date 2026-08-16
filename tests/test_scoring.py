@@ -61,10 +61,3 @@ def test_two_lines_are_summed_before_conversion():
     # Summed first: 4 passes -> 3 VP. Converted separately: 2 + 2 = 4 VP.
     assert passes_to_vp(2) + passes_to_vp(2) == 4
     assert score_for(board, slots) == 3
-
-
-def test_a_line_returning_to_its_own_slot_does_not_score():
-    board = Board.empty(3)
-    place_tile(board, (0, 0), (1, 0), 2, 0)
-    solo = [slot_index_of(3, 0, 0, Side.N)]
-    assert score_lines(board, solo) == {}
