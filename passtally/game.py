@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import copy
 import random
 from dataclasses import dataclass, field
+from typing import Hashable
 
 from passtally import config
 from passtally.board import Board
 from passtally.markers import marker_destination
 from passtally.placement import can_place, place_tile
-from passtally.tile_types import TILE_TYPES, offset_of
+from passtally.tile_types import TILE_TYPES, canon, distinct_orientations, offset_of
 from passtally.trace import score_for
-from passtally.types import Move, MoveMarker, PlaceTile, TypeId
+from passtally.types import Move, MoveMarker, PlaceTile, Pos, TypeId
 
 
 @dataclass
@@ -154,13 +156,46 @@ class Game:
             self._over = True
 
     def _trigger_fired(self) -> bool:
-        # Task 9 adds the second trigger: no tile can be placed anywhere.
-        return all(pile.face_up is None for pile in self.piles)
+        if all(pile.face_up is None for pile in self.piles):
+            return True
+        return not any(isinstance(m, PlaceTile) for m in self.legal_moves())
 
     # -- queries ---------------------------------------------------------
 
     def legal_moves(self) -> list[Move]:
-        raise NotImplementedError("implemented in Task 9")
+        """Every legal action for the current player, both types.
+
+        Correctness matters even before there is a bot: the "no tile can be
+        placed anywhere" end-of-game trigger depends on it.
+        """
+        moves: list[Move] = []
+
+        for pile_index, pile in enumerate(self.piles):
+            if pile.face_up is None:
+                continue
+            # Legality is footprint-only, so the tile identity affects nothing
+            # here except which orientations are distinct.
+            for orientation in distinct_orientations(pile.face_up):
+                dr, dc = offset_of(orientation)
+                for row in range(self.board.n):
+                    for col in range(self.board.n):
+                        cell_a = (row, col)
+                        cell_b = (row + dr, col + dc)
+                        if can_place(self.board, cell_a, cell_b):
+                            moves.append(
+                                PlaceTile(pile_index, cell_a, cell_b, orientation)
+                            )
+
+        entry = self.players[self.current_player]
+        for marker_index, slot in enumerate(entry.marker_slots):
+            reached: set[int] = set()
+            for distance in config.MARKER_DISTANCES:
+                destination = marker_destination(self.board, slot, distance)
+                if destination is not None and destination not in reached:
+                    reached.add(destination)
+                    moves.append(MoveMarker(marker_index, distance))
+
+        return moves
 
     def is_over(self) -> bool:
         return self._over
@@ -172,3 +207,57 @@ class Game:
         best = max(player.score for player in self.players)
         leaders = [i for i, player in enumerate(self.players) if player.score == best]
         return leaders[0] if len(leaders) == 1 else None
+
+    def clone(self) -> "Game":
+        """Deep copy, for future search. No closures or back-references to trip on."""
+        return copy.deepcopy(self)
+
+    def _partner_offset(self, row: int, col: int) -> Pos | None:
+        """Offset of the neighbour sharing this cell's top placement id.
+
+        Raw placement ids depend on move order, so they cannot go in the key.
+        The offset carries the same information canonically.
+        """
+        cell = self.board.cells[row][col]
+        if cell.placement_id is None:
+            return None
+        for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            neighbour = (row + dr, col + dc)
+            if (
+                self.board.in_bounds(neighbour)
+                and self.board.at(neighbour).placement_id == cell.placement_id
+            ):
+                return (dr, dc)
+        return None
+
+    def key(self) -> Hashable:
+        """Canonical hash: top tiles, markers and piles.
+
+        A placement's history is irrelevant once buried, so only the top tile
+        at each cell contributes. Move-order permutations collapse into the
+        same key, which is what makes this useful as a transposition key.
+        """
+        cells = tuple(
+            (
+                self.board.cells[row][col].height,
+                canon(self.board.cells[row][col].conns)
+                if self.board.cells[row][col].height
+                else None,
+                self._partner_offset(row, col),
+            )
+            for row in range(self.board.n)
+            for col in range(self.board.n)
+        )
+        markers = tuple(tuple(sorted(p.marker_slots)) for p in self.players)
+        piles = tuple((tuple(p.ordered), p.face_up) for p in self.piles)
+        scores = tuple(p.score for p in self.players)
+        return (
+            cells,
+            markers,
+            piles,
+            scores,
+            self.current_player,
+            self.actions_left,
+            self._final_round,
+            self._over,
+        )
