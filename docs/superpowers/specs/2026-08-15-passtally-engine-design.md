@@ -340,6 +340,20 @@ therefore reversible. To revisit a state the trace would need two predecessors, 
 trajectory would have to exit off-board. **A trace starting from a border slot can never loop.**
 Every trace terminates at another ring slot or at an empty cell.
 
+### And a trace can never return to its own slot
+
+The same structure gives a second, stronger result. Each cell contributes two disjoint *wires*,
+and each wire-end links to exactly one neighbouring wire-end, so every connection point has
+degree at most 2. The board therefore decomposes into **simple paths and cycles**. A border slot
+cannot lie on a cycle — nothing exists beyond the board edge — so it is a path *endpoint*, and
+tracing from one endpoint reaches the other. A path with at least one edge has two *distinct*
+endpoints.
+
+So a trace from slot `s` ends either at `DEAD` or at a slot `t ≠ s`, always. `score_lines`
+therefore needs **no** `endpoint != slot` guard; an earlier draft carried one, and it was dead
+code. This holds only while every cell is a perfect matching of all four faces — if the tile set
+ever gains blank faces, the degree-≤2 argument fails and the guard must come back.
+
 The `seen` guard and the `LOOP` result are kept regardless: three lines, and the difference
 between a bug and an infinite loop if the tile data is ever revised. Closed circuits do exist,
 but only detached from the border, so the loop test builds a board by hand and calls `trace`

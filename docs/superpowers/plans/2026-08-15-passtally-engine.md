@@ -1279,7 +1279,7 @@ def test_two_lines_are_summed_before_conversion():
     assert score_for(board, slots) == 3
 
 
-def test_a_line_returning_to_its_own_slot_does_not_score():
+def test_a_lone_marker_scores_nothing():
     board = Board.empty(3)
     place_tile(board, (0, 0), (1, 0), 2, 0)
     solo = [slot_index_of(3, 0, 0, Side.N)]
@@ -1322,9 +1322,14 @@ def score_lines(board: Board, marker_slots: list[int]) -> dict[frozenset[int], i
     lines: dict[frozenset[int], int] = {}
     for slot in marker_slots:
         endpoint, passes = trace(board, slot)
-        # A line can re-enter its start cell through another face and leave by
-        # the original border face. That is not a pair, so exclude it.
-        if isinstance(endpoint, int) and endpoint != slot and endpoint in owned:
+        # No endpoint != slot guard is needed. Each cell contributes two
+        # disjoint wires and each wire-end links to exactly one neighbour, so
+        # every connection point has degree <= 2 and the board decomposes into
+        # simple paths and cycles. A border slot cannot lie on a cycle, so it
+        # is a path ENDPOINT -- and tracing from one endpoint reaches the
+        # other, which is necessarily a different slot. Same structural
+        # argument that makes LOOP unreachable from the border.
+        if isinstance(endpoint, int) and endpoint in owned:
             lines[frozenset((slot, endpoint))] = passes
     return lines
 
