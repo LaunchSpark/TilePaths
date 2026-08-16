@@ -21,6 +21,18 @@ class Ring:
         self.size = 4 * n
         self.continuous = continuous
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Ring):
+            return NotImplemented
+        return (
+            self.n == other.n
+            and self.size == other.size
+            and self.continuous == other.continuous
+        )
+
+    def __hash__(self) -> int:
+        return hash((self.n, self.size, self.continuous))
+
     def move(self, slot: int, distance: int) -> int:
         """Raw ring arithmetic. Ignores occupancy -- see markers.marker_destination."""
         return (slot + distance) % self.size
