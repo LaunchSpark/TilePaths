@@ -22,6 +22,8 @@ def marker_destination(board: Board, start_slot: int, distance: int) -> int | No
     # occupied there is nowhere to land.
     for _ in range(board.nav.size):
         position = board.nav.move(position, stride)
+        # A marker must land somewhere other than where it started. After a full
+        # lap, position returns to start_slot; this guard excludes it even if empty.
         if board.ring[position].occupant is None and position != start_slot:
             remaining -= 1
             if remaining == 0:
