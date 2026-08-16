@@ -1466,12 +1466,21 @@ def marker_destination(board: Board, start_slot: int, distance: int) -> int | No
     # occupied there is nowhere to land.
     for _ in range(board.nav.size):
         position = board.nav.move(position, stride)
-        if board.ring[position].occupant is None:
+        # After a full lap this candidate is the slot we started from, so it is
+        # excluded even when its occupant field reads empty -- a marker must end
+        # somewhere other than where it began.
+        if board.ring[position].occupant is None and position != start_slot:
             remaining -= 1
             if remaining == 0:
                 return position
     return None
 ```
+
+The `position != start_slot` clause is load-bearing, not defensive padding. Without it,
+`test_returns_none_when_every_other_slot_is_occupied` walks the whole ring, wraps to index 0 —
+whose `occupant` the test never set — and returns the marker's own slot instead of `None`. In
+ordinary play the origin's `occupant` is set, so the clause is a no-op; it only bites in the
+near-fully-occupied edge case, and only on the final iteration.
 
 - [ ] **Step 4: Run test to verify it passes**
 
