@@ -114,21 +114,27 @@ comment. Nothing is scattered through the code.
 | -------- | ----- | ---- |
 | `N` | 6 | board dimension, parameterized; ring is 4N = 24 slots |
 | `RING_CONTINUOUS` | `True` | markers may travel around corners (`mod 4N`) |
-| `PASSES_TO_VP` | see below | nonlinear; exact table unknown |
+| `PASSES_TO_VP` | see below | nonlinear; **resolved**, real table |
 | `END_IMMEDIATELY_ON_EMPTY` | `False` | round-completion path is implemented |
 | tiles per pile | 14 | shuffle all 42, deal three ordered piles of 14 |
 
 Ring continuity sits behind a `Ring` class exposing a single `move(slot, distance) -> slot`
 method, so the corner rule is swappable without touching anything else.
 
-**`PASSES_TO_VP` stub.** An ordered list of `(min_passes, vp)` thresholds, looked up by finding
-the last entry whose `min_passes <= total`. Placeholder values, deliberately nonlinear so that
-sum-then-convert and convert-then-sum visibly diverge:
+**`PASSES_TO_VP`.** An ordered list of `(min_passes, vp)` thresholds, looked up by finding the
+last entry whose `min_passes <= total`. These are the real values:
 
 ```python
-PASSES_TO_VP = [(0, 0), (1, 1), (3, 3), (5, 6), (7, 10), (10, 15)]
-# TODO: verify against rulebook
+PASSES_TO_VP = [
+    (0, 0), (1, 1), (2, 2), (4, 3), (7, 4), (11, 5),
+    (16, 6), (21, 7), (26, 8), (31, 9), (36, 10),
+]
 ```
+
+The bands widen (1, then 2, 3, 4, then 5 thereafter) and the score caps at 10 for 36+ passes.
+Zero passes scores zero. The nonlinearity is exactly why `score_turn` sums before converting:
+two lines of 2 passes each convert separately to 2 + 2 = **4**, but summed first give 4 passes
+→ **3**. That pair is the divergence test in §10.
 
 `TypeId = int`, indexing the six entries of `TILE_TYPES`.
 
@@ -424,7 +430,7 @@ data model is finished.
 - One connected pair → single line scored.
 - Both pairs connected → passes summed, then converted once.
 - Pair connected in both directions → deduped, not double-counted.
-- A case where sum-then-convert ≠ convert-then-sum, proving the order matters.
+- Two lines of 2 passes each → **3 VP**, not 4. Proves sum-then-convert, not convert-then-sum.
 
 The handoff spec's **Connection** test block is retired along with the connection check itself.
 
