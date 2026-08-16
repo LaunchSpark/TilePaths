@@ -1,0 +1,42 @@
+TileID = 1
+cell 1
+(W,N)
+(S,E)
+cell 2
+(N,E)
+(W,S)
+TileID = 2
+cell 1
+(N,S)
+(E,W)
+cell 2
+(N,S)
+(E,W)
+TileID = 3
+cell 1
+(N,S)
+(E,W)
+cell 2
+(N,E)
+(S,w)
+TileID = 4
+cell 1
+(N,S)
+(E,W)
+cell 2
+(S,E)
+(N,W)
+TileID = 5
+cell 1
+(S,E)
+(N,W)
+cell 2
+(S,E)
+(N,W)
+TileID = 6
+cell 1
+(N,E)
+(S,w)
+cell 2
+(N,E)
+(S,w)
