@@ -10,6 +10,7 @@ between a bug and a hang if the tile data is ever revised.
 
 from __future__ import annotations
 
+from passtally import config
 from passtally.board import Board, slot_index_of
 from passtally.types import Result, Side, step
 
@@ -57,3 +58,36 @@ def trace(board: Board, start_slot: int) -> tuple[Result | int, int]:
     """Follow the line entering the board at a ring slot."""
     slot = board.ring[start_slot]
     return trace_from(board, slot.row, slot.col, slot.side)
+
+
+def passes_to_vp(total: int) -> int:
+    """Convert a pass total to victory points via the nonlinear band table."""
+    victory_points = 0
+    for min_passes, value in config.PASSES_TO_VP:
+        if total < min_passes:
+            break
+        victory_points = value
+    return victory_points
+
+
+def score_lines(board: Board, marker_slots: list[int]) -> dict[frozenset[int], int]:
+    """Passes for each line running between two of these markers.
+
+    Keyed by the unordered slot pair, so a line found from both ends is
+    recorded once.
+    """
+    owned = set(marker_slots)
+    lines: dict[frozenset[int], int] = {}
+    for slot in marker_slots:
+        endpoint, passes = trace(board, slot)
+        # A line can re-enter its start cell through another face and leave by
+        # the original border face. That is not a pair, so exclude it.
+        if isinstance(endpoint, int) and endpoint != slot and endpoint in owned:
+            lines[frozenset((slot, endpoint))] = passes
+    return lines
+
+
+def score_for(board: Board, marker_slots: list[int]) -> int:
+    """Victory points earned. Sums all lines BEFORE converting -- the table is
+    nonlinear, so converting each line separately gives the wrong answer."""
+    return passes_to_vp(sum(score_lines(board, marker_slots).values()))
