@@ -124,14 +124,24 @@ method, so the corner rule is swappable without touching anything else.
 **`PASSES_TO_VP`.** An ordered list of `(min_passes, vp)` thresholds, looked up by finding the
 last entry whose `min_passes <= total`. These are the real values:
 
+| passes | 0 | 1 | 2–3 | 4–6 | 7–10 | 11–15 | 16–21 | 22–28 | 29–36 | 37–45 | 46–55 | 56+ |
+| ------ | - | - | --- | --- | ---- | ----- | ----- | ----- | ----- | ----- | ----- | --- |
+| VP     | 0 | 1 | 2   | 3   | 4    | 5     | 6     | 7     | 8     | 9     | 10    | 15  |
+
 ```python
 PASSES_TO_VP = [
-    (0, 0), (1, 1), (2, 2), (4, 3), (7, 4), (11, 5),
-    (16, 6), (21, 7), (26, 8), (31, 9), (36, 10),
+    (0, 0), (1, 1), (2, 2), (4, 3), (7, 4), (11, 5), (16, 6),
+    (22, 7), (29, 8), (37, 9), (46, 10), (56, 15),
 ]
 ```
 
-The bands widen (1, then 2, 3, 4, then 5 thereafter) and the score caps at 10 for 36+ passes.
+**Band widths are the natural numbers** — 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 — so every threshold is
+`1 + n(n-1)/2`. Implement it as the literal table above rather than the formula: the top band
+breaks the pattern by jumping to 15 VP, so the formula would be a trap.
+
+> The source table read `(29-36):8` followed by `(31-45):9`, which overlap on 31–36. Corrected
+> to `37-45` on the strength of the width sequence. **TODO: confirm against rulebook.**
+
 Zero passes scores zero. The nonlinearity is exactly why `score_turn` sums before converting:
 two lines of 2 passes each convert separately to 2 + 2 = **4**, but summed first give 4 passes
 → **3**. That pair is the divergence test in §10.
