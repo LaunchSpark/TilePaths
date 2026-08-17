@@ -152,10 +152,23 @@ two lines of 2 passes each convert separately to 2 + 2 = **4**, but summed first
 trigger fires *and* that it ends immediately if all three piles empty or no tile can be placed.
 The round-completion path is implemented; the immediate case is flagged by the constant above.
 
+`_trigger_fired` has two clauses — all piles exhausted, or no legal `PlaceTile` anywhere. **The
+first is provably subsumed by the second.** `legal_moves` skips any pile whose `face_up` is
+`None`, so when every pile is exhausted it emits no `PlaceTile` at all and the second clause
+already returns `True`. The first clause is kept purely as a fast path: it answers a yes/no
+question without materialising the full move list, including the marker moves the trigger never
+inspects. No behavioural test can distinguish its deletion — this was established by proof and
+confirmed by mutation, and is recorded here so it is not re-derived a third time.
+
 **Setup.** Shuffle all 42 tiles from a seed, deal 14 to each of three ordered piles, flip the
 top of each face-up. Markers are placed by player choice: `setup_place_marker` validates that
 the slot is empty and that the player has no marker on that edge yet. Setup turn order is left
 to the caller.
+
+Setup is **complete** when every player holds `MARKERS_PER_PLAYER` markers. `is_setup_complete`
+exposes this; `apply` refuses to run before it, and `setup_place_marker` refuses after it.
+Without that contract a caller could play an entire legal game in which no marker exists and
+nobody ever scores.
 
 ---
 
