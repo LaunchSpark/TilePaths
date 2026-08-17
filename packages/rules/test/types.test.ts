@@ -32,6 +32,15 @@ describe("Side", () => {
   it.each(ALL)("two quarter turns equals opposite (%i)", (s) => {
     expect(rotated(s, 2)).toBe(opposite(s));
   });
+
+  it.each(ALL)("negative quarter turn matches the equivalent positive one (%i)", (s) => {
+    expect(rotated(s, -1)).toBe(rotated(s, 3));
+  });
+
+  it.each(ALL)("negative quarter turn stays a valid Side (%i)", (s) => {
+    expect(rotated(s, -1)).toBeGreaterThanOrEqual(0);
+    expect(rotated(s, -1)).toBeLessThanOrEqual(3);
+  });
 });
 
 describe("geometry", () => {

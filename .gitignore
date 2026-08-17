@@ -183,4 +183,3 @@ cython_debug/
 .superpowers/
 
 node_modules/
-dist/

@@ -35,4 +35,11 @@ describe("makeRng", () => {
     makeRng(3).shuffle(a);
     expect(a).not.toEqual([...Array(42).keys()]);
   });
+
+  it("different seeds produce different orderings", () => {
+    const a = [...Array(42).keys()], b = [...Array(42).keys()];
+    makeRng(9).shuffle(a);
+    makeRng(3).shuffle(b);
+    expect(a).not.toEqual(b);
+  });
 });
