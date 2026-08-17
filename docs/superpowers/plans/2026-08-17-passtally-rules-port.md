@@ -869,12 +869,22 @@ describe("rotation", () => {
 
   // NOTE: the Python original of this test was VACUOUS -- it wrote
   // `for turns in (0, 4, 8): resolve(tid, turns % 4)`, which is 0 every time,
-  // so it never rotated anything. This version exercises rotConns directly.
-  it.each(IDS)("four single-step rotations return to canonical (tile %i)", (t) => {
+  // so it never rotated anything.
+  //
+  // A four-turn round trip ALONE is also vacuous: applying any function four
+  // times returns to the start when that function is the identity, so a no-op
+  // rotConns passes it. The shape-transition cases below are what actually
+  // bite. Note X is genuinely rotation-invariant, so "one turn always changes
+  // the cell" would be a wrong assertion in the other direction.
+  const TURNED: Record<string, "X" | "A" | "B"> = { X: "X", A: "B", B: "A" };
+
+  it.each(IDS)("rotates every cell's shape correctly (tile %i)", (t) => {
     for (const cell of TILE_TYPES[t]) {
-      let acc = cell;
-      for (let i = 0; i < 4; i++) acc = rotConns(acc, 1);
-      expect(canon(acc)).toBe(canon(cell));
+      const shape = shapeOf(cell);
+      expect(shapeOf(rotConns(cell, 1))).toBe(TURNED[shape]);
+      expect(shapeOf(rotConns(cell, 2))).toBe(shape);          // 180-invariant
+      expect(shapeOf(rotConns(cell, 3))).toBe(TURNED[shape]);
+      expect(canon(rotConns(cell, 4))).toBe(canon(cell));      // round trip
     }
   });
 
