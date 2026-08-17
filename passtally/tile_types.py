@@ -98,7 +98,9 @@ def offset_of(orientation: int) -> Pos:
     return _OFFSET[orientation]
 
 
-def _signature(type_id: TypeId, orientation: int):
+def _signature(
+    type_id: TypeId, orientation: int
+) -> tuple[tuple[Pos, frozenset[frozenset[Side]]], ...]:
     """Board content this orientation produces, anchored top-left."""
     conns_a, conns_b = resolve(type_id, orientation)
     dr, dc = offset_of(orientation)

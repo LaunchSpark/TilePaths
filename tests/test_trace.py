@@ -74,6 +74,38 @@ def test_closed_loop_terminates():
     assert passes == 3
 
 
+def test_reentering_a_cell_through_a_different_face_keeps_counting():
+    """Re-entering the same cell through a different face is legal and must
+    keep counting -- the visited key must include entry face, not just
+    (row, col). Without that, this line would be wrongly reported as a LOOP
+    with a truncated pass count instead of reaching its real endpoint.
+
+    Board: (0,1)=B, (0,2)=A, (1,1)=X, (1,2)=B, then a two-cell cross tile
+    at (2,1)/(3,1) extending south to a border slot.
+
+    Tracing from (1,1) entering W: X routes W->E into (1,2); B there routes
+    W->N back into (0,2); A routes S->W into (0,1); B there routes E->S,
+    landing back on (1,1) -- but entering through N this time, a different
+    face than the original W entry. The line then routes N->S through (1,1)
+    and continues south through the cross tiles at (2,1)/(3,1) and off the
+    board at a real ring slot.
+    """
+    board = Board.empty(4)
+    place_tile(board, (0, 1), (0, 2), 1, 0)  # (0,1)=B, (0,2)=A
+    place_tile(board, (1, 1), (1, 2), 4, 0)  # (1,1)=X, (1,2)=B
+    place_tile(board, (2, 1), (3, 1), 2, 0)  # extends the line south to the border
+
+    end, passes = trace_from(board, 1, 1, Side.W)
+
+    # Must NOT be reported as a loop -- (1,1) is legitimately revisited
+    # through its N face after being entered through W.
+    assert end != Result.LOOP
+    assert end == slot_index_of(4, 3, 1, Side.S)
+    # 1 ((1,1) first visit) + 1 ((0,1)/(0,2) tile, seam-crossed) +
+    # 1 ((1,1) second visit, different face) + 1 ((2,1)/(3,1) tile) = 4.
+    assert passes == 4
+
+
 def test_trace_is_symmetric_from_both_ends():
     board = Board.empty(3)
     for col in range(3):

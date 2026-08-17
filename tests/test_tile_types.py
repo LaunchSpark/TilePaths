@@ -52,9 +52,29 @@ def test_every_resolved_cell_is_a_perfect_matching(type_id, orientation):
 
 @pytest.mark.parametrize("type_id", [1, 2, 3, 4, 5, 6])
 def test_four_rotations_return_to_canonical(type_id):
-    original = tuple(canon(c) for c in resolve(type_id, 0))
-    for turns in (0, 4, 8):
-        assert tuple(canon(c) for c in resolve(type_id, turns % 4)) == original
+    """Rotating a cell's conns four quarter-turns must return the original.
+
+    Rotate step-by-step (not by calling rot_conns(conns, 4) directly) so the
+    test actually exercises repeated single-step rotation. A/B cells must
+    visibly change after one turn -- without that check, a rot_conns that was
+    accidentally made a no-op would still satisfy "four turns == original"
+    vacuously, since doing nothing four times is still nothing.
+    """
+    from passtally.tile_types import rot_conns, shape_of
+
+    for cell in resolve(type_id, 0):
+        original = canon(cell)
+        rotated = cell
+        for turn in range(4):
+            rotated = rot_conns(rotated, 1)
+            if shape_of(cell) != "X":
+                # A and B cells alternate under 90 degrees, so after 1 or 3
+                # single-step turns the cell must differ from where it started.
+                if turn % 2 == 0:
+                    assert canon(rotated) != original
+        assert canon(rotated) == original
+        # And a single 4-quarter-turn call must agree with four 1-turn calls.
+        assert canon(rot_conns(cell, 4)) == original
 
 
 def test_offsets_follow_the_orientation_convention():

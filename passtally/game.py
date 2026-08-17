@@ -11,7 +11,13 @@ from passtally import config
 from passtally.board import Board
 from passtally.markers import marker_destination
 from passtally.placement import can_place, place_tile
-from passtally.tile_types import TILE_TYPES, canon, distinct_orientations, offset_of
+from passtally.tile_types import (
+    ORIENTATIONS,
+    TILE_TYPES,
+    canon,
+    distinct_orientations,
+    offset_of,
+)
 from passtally.trace import score_for
 from passtally.types import Move, MoveMarker, PlaceTile, Pos, TypeId
 
@@ -73,6 +79,11 @@ class Game:
         )
 
     def setup_place_marker(self, player: int, slot: int) -> None:
+        if self.is_setup_complete():
+            raise ValueError("setup is already complete; play has begun")
+        if not 0 <= player < len(self.players):
+            raise ValueError(f"player {player} does not exist")
+
         entry = self.players[player]
         if len(entry.marker_slots) >= config.MARKERS_PER_PLAYER:
             raise ValueError(f"player {player} has already placed all markers")
@@ -94,6 +105,8 @@ class Game:
     def apply(self, move: Move) -> None:
         if self._over:
             raise ValueError("the game is over")
+        if not self.is_setup_complete():
+            raise ValueError("setup is not complete: not every player has all their markers")
         if isinstance(move, PlaceTile):
             self._apply_place(move)
         elif isinstance(move, MoveMarker):
@@ -106,9 +119,13 @@ class Game:
             self._end_turn()
 
     def _apply_place(self, move: PlaceTile) -> None:
+        if not 0 <= move.pile_index < len(self.piles):
+            raise ValueError(f"pile_index {move.pile_index} is out of range")
         pile = self.piles[move.pile_index]
         if pile.face_up is None:
             raise ValueError(f"pile {move.pile_index} is empty")
+        if move.orientation not in ORIENTATIONS:
+            raise ValueError(f"orientation {move.orientation} is out of range")
 
         offset = offset_of(move.orientation)
         expected = (move.cell_a[0] + offset[0], move.cell_a[1] + offset[1])
@@ -163,7 +180,11 @@ class Game:
     # -- queries ---------------------------------------------------------
 
     def legal_moves(self) -> list[Move]:
-        """Every legal action for the current player, both types.
+        """Every distinct-outcome action for the current player, both types.
+
+        Not every action `apply` would accept: marker moves are deduped by
+        landing slot, so a distance that lands on a slot another distance
+        already reaches is omitted here even though `apply` would accept it.
 
         Correctness matters even before there is a bot: the "no tile can be
         placed anywhere" end-of-game trigger depends on it.
@@ -200,6 +221,19 @@ class Game:
     def is_over(self) -> bool:
         return self._over
 
+    def is_setup_complete(self) -> bool:
+        """True once every player holds config.MARKERS_PER_PLAYER markers.
+
+        Neither the design spec nor the plan defined when setup ends, so
+        without this a caller could `apply` a full legal game with zero
+        markers placed. `apply` requires this before any in-game move, and
+        `setup_place_marker` refuses once it holds (play has begun).
+        """
+        return all(
+            len(player.marker_slots) == config.MARKERS_PER_PLAYER
+            for player in self.players
+        )
+
     def winner(self) -> int | None:
         """The single highest scorer, or None if the game is unfinished or tied."""
         if not self._over:
@@ -231,7 +265,8 @@ class Game:
         return None
 
     def key(self) -> Hashable:
-        """Canonical hash: top tiles, markers and piles.
+        """Canonical hash: top tiles, markers, piles, scores, and turn state
+        (current_player, actions_left, _final_round, _over).
 
         A placement's history is irrelevant once buried, so only the top tile
         at each cell contributes. Move-order permutations collapse into the
