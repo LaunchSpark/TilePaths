@@ -2,7 +2,7 @@
 
 **Status:** approved, ready for planning
 **Date:** 2026-08-17
-**Companion to:** `2026-08-15-passtally-engine-design.md` (the Python rules engine)
+**Companion to:** `2026-08-15-passtally-engine-design.md` (the rules design, language-agnostic)
 **Source requirements:** the "Passtally Client — Features & Layout" brief
 
 **Scope:** Tier 1 only — a playable hot-seat client. The bar is that two people can finish a
@@ -12,149 +12,147 @@ full game at one keyboard and the client never permits an illegal state.
 scoring breakdowns, multiplayer, lobby, spectators, timers), plus the brief's own out-of-scope
 list: AI, sound, animation, mobile, accounts, persistence, replay export, cross-turn undo.
 
-Tier 3 is a separate subsystem and gets its own spec. Nothing here forecloses it.
-
 **Legal note:** clean-room implementation from published rules. Do not copy tile artwork, the
 name, or box/board trade dress into anything distributed.
 
 ---
 
-## 1. The gaps in the brief
+## 1. The gaps in the brief, and how they resolved
 
 The brief specifies a Canvas-plus-DOM client but never names a language, and the engine it must
-drive is Python. It also assumes the client can read game state, which the engine cannot
-provide — its public surface is `new`, `setup_place_marker`, `legal_moves`, `apply`, `is_over`,
-`winner`, `clone`, `key`, with no serialization anywhere. `key()` is a hash and deliberately
-lossy.
+drive was Python. It also assumes the client can read game state, which the engine could not
+provide — no serialization anywhere, and `key()` is a deliberately lossy hash. A third conflict
+it does not anticipate: **the engine has no concept of a tentative action**; `apply()` commits
+immediately, drawing the replacement and, at zero actions, scoring and advancing the player.
 
-A third conflict the brief does not anticipate: **the engine has no concept of a tentative
-action.** `apply()` commits immediately — it mutates the board, pops the pile's replacement
-into `face_up`, and at zero actions it scores, advances the player and evaluates end
-conditions. There is no rollback.
+The resolution to the first gap collapsed the other two.
 
-All three are resolved below.
+**The engine is ported to TypeScript and shared.** At 833 lines with stdlib-only imports, it is
+small enough that porting costs less than living with two implementations. One `rules` package
+is imported by everything that needs rules, so there is no duplication to keep in sync — not
+now, and not when tier 2's tracer arrives.
+
+Two consequences follow, and both remove work:
+
+- **Tier 1 ships no server.** The bar is hot-seat: two people, one keyboard, one tab. There is
+  no second client to sync with and no adversary to validate against. `Game.apply()` still
+  raises on any illegal move, so "the client never permits an illegal state" holds identically,
+  enforced directly rather than over HTTP.
+- **Tentative turns need no rollback machinery.** The client owns exploration; the committed
+  `Game` is only ever advanced by a whole turn.
 
 ---
 
 ## 2. Architecture
 
-**A local HTTP server. Python remains authoritative. The client owns exploration.**
-
-| Server (Python, FastAPI) | Client (TypeScript) |
-| ------------------------ | ------------------- |
-| Source of truth | Hit-testing and rendering |
-| Validation of every committed turn | Tentative exploration and undo |
-| Committed history | Legality *preview* |
-| Scoring of record | Ghost, snapping, rotation |
-| End-of-game determination | Decision aids (tier 2 onward) |
-| Serving the view model and rules data | Tie-break *for display* |
-
-This is a **deliberate two-implementation design**, named here because it is the main risk. The
-brief already anticipated it — tier 3 calls for a "client-side tracer for preview" and refers to
-rules duplication explicitly. Tier 1 pulls a small part of that forward, because exploration
-needs it.
-
-Rejected alternatives, and why:
-
-- **Server-side exploration** (each tentative action a round trip against a clone) keeps rules
-  duplication at zero but makes the client incapable of answering any question not anticipated
-  by an endpoint. The brief's tier-2 features are exactly such questions.
-- **Precomputing the exploration tree** is cheaper than it first appears — legality is
-  footprint-only, and a placement can only flip the legality of footprints touching its two
-  cells, so a turn's full two-action plan delta-encodes to roughly 10KB computed in
-  microseconds. It is a legitimate tier-1 answer. It was rejected because tier 2 needs *trace
-  results* rather than booleans, which do not compress the same way, and because a precompute
-  can only answer questions asked in advance.
-- **A full TypeScript port** would abandon a Python engine with 182 tests that survived mutation
-  testing, and tier 3 needs it back as server authority regardless.
-
-**Frontend: TypeScript + Vite, no framework.** The view model is a cross-language contract and
-TS makes it checkable. The DOM chrome is a tray, a rail and a log; a framework earns nothing at
-that size, and the brief wants a single imperative canvas draw loop.
-
-### Module layout
-
 ```text
-passtally/            existing engine -- unchanged except one promotion
-  board.py            + partner_offset() promoted from Game._partner_offset
-  view.py             NEW -- builds the redacted view model
+packages/
+  rules/              @passtally/rules -- the ported engine, THE single rules source
+    src/
+      types.ts        Side, Result, Move, Pos, TypeId
+      config.ts       N, PASSES_TO_VP, MARKER_DISTANCES, MARKERS_PER_PLAYER, ...
+      rng.ts          NEW -- seeded PRNG (see section 3)
+      tileTypes.ts    the 6 designs, import-time validator, rotation cache
+      ring.ts         Ring
+      board.ts        Cell, Slot, Board, buildRing, slotIndexOf, partnerOffset
+      placement.ts    canPlace, placeTile
+      trace.ts        traceFrom, trace, passesToVp, scoreLines, scoreFor
+      markers.ts      markerDestination
+      game.ts         Game
+    test/             ported suite + differential oracle fixtures
+  client/
+    src/
+      session.ts      Session interface + LocalSession
+      view.ts         Game -> GameView (redacted)
+      geometry.ts     PURE: cursor -> unit index -> cell | ring slot | none
+      tentative.ts    client-only turn state: <=2 moves, local board overlay
+      state.ts        the six-state machine
+      render/board.ts canvas draw loop
+      render/tiles.ts line art from conns
+      ui/{tray,rail,log}.ts
+passtally/            Python engine -- RETAINED as oracle, never shipped
 tools/
-  gen_rules.py        NEW -- emits rules.json and the conformance fixtures
-server/
-  session.py          committed Game only -- no tentative state
-  app.py              FastAPI: JSON API + serves the built client
-client/src/
-  types.ts            view-model types, mirroring view.py
-  api.ts              typed fetch wrappers
-  rules/              THE PORTED SUBSET -- see section 3
-    canPlace.ts
-    markers.ts
-    tiles.ts          resolve / offsetOf / distinctOrientations, over rules.json
-  geometry.ts         PURE: cursor -> unit index -> cell | ring slot | none
-  tentative.ts        client-only turn state: <=2 moves, local board overlay
-  state.ts            the six-state machine
-  render/board.ts     canvas draw loop
-  render/tiles.ts     line art from conns
-  ui/tray.ts
-  ui/rail.ts
-  ui/log.ts
+  gen_oracle.py       emits differential fixtures from the Python engine
 ```
 
-`Game._partner_offset` becomes a free function `partner_offset(board, row, col)` in `board.py`.
-The client needs tile-boundary information both to draw 1×2 outlines and to implement
-`canPlace`'s straddling check, so `view.py` needs what `key()` needs. One caller becoming two is
-the moment to promote it. **This is the only change to existing engine code, and it is a move.**
+Tooling: npm workspaces, Vite, Vitest, TypeScript in strict mode. No runtime dependencies in
+`rules`.
+
+**`packages/rules` and `packages/client` are separate deliverables and warrant separate
+implementation plans.** The rules package is fully testable on its own — the ported suite plus
+the differential oracle gate it without a single pixel being drawn — and the client is far
+easier to build against a package that is already proven. Plan one ends when the oracle passes.
+
+### The Session seam
+
+The committed `Game` sits behind an interface, so the rendering layer never touches it directly:
+
+```ts
+interface Session {
+  getView(): GameView                                    // redacted
+  placeSetupMarker(player: number, slot: number): void
+  commit(moves: Move[]): TurnResult
+}
+```
+
+Tier 1 ships `LocalSession`, owning a `Game` in-process. Tier 3 adds `RemoteSession` over HTTP
+implementing the same interface, and the rendering layer does not change.
+
+This matters even without a network. The deck lives in the same process as the renderer in tier
+1, so redaction is not yet a *trust* boundary — but making it a **code** boundary now means it
+becomes a trust boundary at tier 3 for free, rather than being retrofitted through rendering
+code that assumed synchronous access to everything.
 
 ---
 
-## 3. Shared data, duplicated logic
+## 3. The port
 
-The rules **data** is generated from Python, never hand-transcribed. Only the **logic** exists
-twice.
+833 lines of engine and 1,138 lines of tests, both ported. The design spec
+(`2026-08-15-passtally-engine-design.md`) is language-agnostic and remains the authority on
+rules; only the implementation language changes.
 
-`tools/gen_rules.py` emits `rules.json`, served at boot and consumed by the client's tests:
+Four constructs need real decisions:
 
-- the six tile designs and their resolved conns for all four orientations
-- the orientation offset table (`0 → (1,0)`, `1 → (0,-1)`, `2 → (-1,0)`, `3 → (0,1)`)
-- `distinctOrientations` per tile (4, 2, 4, 4, 2, 2)
-- the ring scheme and relevant `config.py` constants
+| Python | TypeScript | Note |
+| ------ | ---------- | ---- |
+| `@dataclass` | interface + factory function | mechanical |
+| `Enum` | numeric union, `Side` stays `N=0, E=1, S=2, W=3` | the clockwise ordering is load-bearing for `(v+1)%4` rotation |
+| `frozenset` in `canon()` | sorted canonical string key | used for order-independent conns comparison and in `key()` |
+| `copy.deepcopy` in `clone()` | hand-written structural clone | the engine's final review measured `deepcopy` at ~507µs and named a hand-written clone as the first optimisation — the port is where that comes for free |
 
-Hand-copying `TILE_TYPES` into TypeScript would be a silent, awful class of bug. This removes it.
+**Seeded RNG does not port.** TypeScript has no stdlib seeded PRNG, so `rng.ts` implements
+mulberry32 plus Fisher–Yates. **Python seeds will not reproduce the same deal in TypeScript**,
+which is why the oracle fixtures below record dealt piles explicitly rather than seeds.
 
-### What is ported for tier 1
+### The differential oracle
 
-| In the client | Notes |
-| ------------- | ----- |
-| `canPlace(cells, a, b)` | footprint-only: in bounds, orthogonally adjacent, equal height, not the two halves of one tile (via `partner`). ~10 lines |
-| `markerDestination(ring, start, distance)` | signed distance, occupied slots jumped without consuming it |
-| `applyPlaceLocal` / `applyMarkerLocal` | tentative board overlay for rendering only |
-| `resolve` / `offsetOf` / `distinctOrientations` | lookups over `rules.json`, not reimplementations |
-| ring index round-trip | also needed by hit-testing |
+The Python engine is retained — not shipped, not maintained as a parallel implementation, but
+kept as a **reference to test against**. This gives the TypeScript port something the Python
+engine never had for itself: an independent implementation to disagree with.
 
-### What stays server-only
+`tools/gen_oracle.py` runs random playouts through the Python engine and records, per fixture:
 
-`trace` and scoring · pile draws and ordering · end-of-game conditions · turn advancement ·
-setup-order enforcement · winner determination.
+- the explicit dealt piles (not a seed)
+- the setup marker placements in order
+- the full move sequence
+- a **portable state digest after every single action**
 
-The tracer arrives client-side at tier 2 and will roughly double the duplicated surface. That is
-expected, and it sits on this foundation.
+The digest is canonical JSON over the complete state — cell heights, conns, partner offsets,
+ring occupants, pile contents, scores, current player, actions left, end-of-game flags — with
+sorted keys. Not a hash: when it diverges you want to read the diff. Deliberately *not* `key()`,
+whose canonical form is language-specific and which is lossy by design.
 
-### The safety net
-
-Commit sends the full move list and the server replays it **atomically** against the committed
-game. Any divergence between the two implementations surfaces as a **rejected turn** — visible
-and loud — never as corrupted state. `apply()` already raises `ValueError` on anything illegal,
-and the engine's final review added guards for negative indices and incomplete setup.
+The TS test suite replays each fixture and asserts the digest matches at every step. A
+divergence anywhere in a playout is caught at the action that caused it.
 
 ---
 
 ## 4. The view model
 
-Redacted from day one — pile counts, never contents — which costs nothing now and makes tier 3's
-requirement free rather than a retrofit.
+Redacted from the start — pile counts, never contents.
 
 ```ts
-type Side = 0 | 1 | 2 | 3          // N, E, S, W -- matches the engine exactly
+type Side = 0 | 1 | 2 | 3          // N, E, S, W
 type TypeId = 1 | 2 | 3 | 4 | 5 | 6
 type Pos = [row: number, col: number]
 
@@ -182,80 +180,66 @@ type GameView = {
   setupNext: number | null
   winner: number | null
 }
+
+type TurnResult = {
+  lines: { slots: [number, number]; passes: number }[]
+  totalPasses: number
+  vpAwarded: number
+}
 ```
 
-**There is no `legalMoves` field.** The client computes legality itself. An earlier draft
-bundled it and that turned out to leak: `legal_moves` iterates `distinct_orientations(face_up)`,
-and those counts split the six designs into `{1,3,4}` with four orientations and `{2,5,6}` with
-two — so the orientation set for a pile whose replacement had been drawn revealed which half of
-the deck the next tile came from. Verified empirically before removal.
+`GameView` carries no legal-move list: the client has the rules and computes legality itself.
 
-The leak is now **impossible to express**: the client is never sent hidden pile contents, and
-there is no derived field computed from them.
+**This is also what closes an information leak.** An earlier draft bundled a `legalMoves` field,
+which turned out to leak: `legalMoves` iterates `distinctOrientations(faceUp)`, and those counts
+split the six designs into `{1,3,4}` with four orientations and `{2,5,6}` with two — so the
+orientation set for a pile whose replacement had been drawn revealed which half of the deck the
+next tile came from. Verified empirically before removal. With no derived field and no hidden
+data crossing the `Session` boundary, the channel cannot be expressed.
 
-**A redaction test is part of tier 1**, asserting no pile's ordered contents appear in
-serialized output. It guards tier 3 before tier 3 exists.
+**A redaction test is part of tier 1**, asserting no pile's ordered contents are reachable
+through `GameView`. It guards tier 3 before tier 3 exists.
+
+`TurnResult` exists because the turn log needs passes and lines, not just a VP total.
+`scoreFor` returns VP only, but `scoreLines(board, markerSlots)` already returns the per-line
+dict — `commit` calls it directly.
 
 ---
 
 ## 5. Tentative turns
 
-**The server has no tentative state.** A session holds the committed `Game` and nothing else.
-The client owns exploration entirely; the server only ever receives completed turns.
+**The committed `Game` has no tentative state.** The client owns exploration entirely and the
+session only ever receives completed turns.
 
 This follows from what the commitment rules are *for*: a player may try combinations of the
 available tiles and put them back, so long as **no new information is revealed**. Turning over a
-replacement is the irreversible act — once you have seen it, you cannot un-see it, so the
-placement that caused it is locked in. Replacements are therefore turned over at commit, not at
-placement.
+replacement is the irreversible act — once seen it cannot be unseen, so the placement that
+caused it is locked in. Replacements are therefore turned over at commit, not at placement.
 
 The consequence: **a pile you have tentatively placed from shows nothing**, so there is nothing
 to place from it a second time. "A spent pile is done for the turn" is not a restriction anyone
 imposes — it falls out of the reveal timing.
 
-The client therefore holds:
+The client holds:
 
 - an ordered list of at most two tentative moves
 - a local board overlay derived by applying them to the committed `cells`
 - a per-pile `spent` flag, marking piles consumed this turn
 
-Undo drops the last move and recomputes the overlay. **Zero network traffic during exploration.**
+Undo drops the last move and recomputes the overlay.
 
-**Setup placements are not tentative.** Each setup marker commits immediately via its own
-endpoint. Nothing is revealed by placing one, so there is nothing to explore, and the snake order
-needs server arbitration anyway. The `setup` state has no undo and no commit button.
+`Game.apply()` still pops the replacement when it applies a placement. That is a detail *inside*
+the session: it happens at commit, and the UI learns the new face-up tiles from the returned
+view — exactly when a player would turn them over.
 
-The engine still pops the replacement inside `_apply_place`. That is now a private implementation
-detail: it happens on the server at commit, and the client learns the new face-up tiles from the
-commit response — which is exactly when a player would turn them over.
-
-### What commit reports
-
-The turn log needs passes and lines, not just a VP total. `score_for` returns VP only, but
-`score_lines(board, marker_slots)` already returns the per-line dict. Commit calls it directly.
-No engine change — a call the engine already supports.
+**Setup placements are not tentative.** Each commits immediately via `placeSetupMarker`. Nothing
+is revealed by placing one, so there is nothing to explore. `LocalSession` enforces the snake
+order (§9) and rejects an out-of-turn placement; the engine's own per-edge and occupied-slot
+validation still runs beneath it. The `setup` state has no undo and no commit button.
 
 ---
 
-## 6. API
-
-Sessions are in-memory, keyed by game id. No persistence — an explicit non-goal.
-
-| Route | Purpose |
-| ----- | ------- |
-| `GET /api/rules` | generated `rules.json` — tile data, offsets, ring scheme, constants |
-| `POST /api/game` | new game (`n_players`, `seed`, `board_size`) → id + view |
-| `GET /api/game/{id}` | current view |
-| `POST /api/game/{id}/setup` | place one setup marker; snake order enforced server-side |
-| `POST /api/game/{id}/commit` | `{ moves: Move[] }` → view + turn result |
-
-There are no tentative endpoints. Commit is atomic: all moves apply, or none do and the turn is
-rejected with a reason. Per the brief, the client renders a rejection visibly — a shake or
-flash, never a silent no-op.
-
----
-
-## 7. Interaction
+## 6. Interaction
 
 ```text
 setup ──(all markers placed)──> idle
@@ -265,10 +249,8 @@ tile_selected   ──click legal anchor──> idle    (actionsLeft - 1, pile m
 marker_selected ──click destination───> idle    (actionsLeft - 1)
 idle ──Enter, actionsLeft == 0──> committing ──> idle | game_over
 any  ──Esc──> idle
-idle ──Backspace──> idle        (undo last tentative, local)
+idle ──Backspace──> idle        (undo last tentative)
 ```
-
-`committing` is the only state that touches the network during a turn.
 
 ### Input map
 
@@ -288,7 +270,7 @@ handles.
 
 ---
 
-## 8. Hit-testing and the cross-boundary traps
+## 7. Hit-testing, and the one remaining trap
 
 Hit-testing is one pure function, tested independently of rendering:
 
@@ -303,33 +285,28 @@ hitTest(px: number, py: number, layout: Layout): Hit
 With the ring one cell deep on each side the board region is `N + 2` units across, so
 `unit = size / (N + 2)`. Corners of the ring band are dead space and return `none`.
 
-### Trap 1: ring indexing across the language boundary
+Ring indexing is **no longer a cross-language risk** — `hitTest` calls the same `slotIndexOf`
+the rules use, in the same process. What remains is the pixel-to-unit mapping, which is ordinary
+new code and is tested directly against `buildRing`.
 
-The client's slot indexing must match `build_ring` **exactly**, in another language, with no
-compiler to catch drift. The engine's ring runs clockwise from the top-left: north edge
-`0..n-1`; east `n..2n-1`; south `2n..3n-1` with columns reversed; west `3n..4n-1` with rows
-reversed. Get a reversal wrong and markers land on the wrong slot, silently.
-
-Guarded by the conformance fixtures in §10.
-
-### Trap 2: rotation offers placements `distinctOrientations` omits
+### The trap that survives: rotation offers placements the distinct set omits
 
 The brief says `R` cycles four orientations. But only *distinct* orientations produce distinct
 board states — for the symmetric tiles 2, 5 and 6 that is two, because 180° rotation swaps the
 two cells while leaving each cell's shape unchanged.
 
-Rotating such a tile to orientation 2 produces a placement that is genuinely legal (`can_place`
-is footprint-only and would accept it) but that is not in the tile's distinct set — so naive
-matching would wrongly reject it.
+Rotating such a tile to orientation 2 produces a placement that is genuinely legal (`canPlace`
+is footprint-only and accepts it) but that is not in the tile's distinct set — so naive matching
+against `distinctOrientations` would wrongly reject it.
 
 **Resolution:** keep `R` cycling all four, because predictable rotation matters more than
-internal tidiness, and **normalize before sending**. Orientations `o` and `o + 2` cover the same
-footprint with the cells swapped, so `(anchor, o + 2)` is rewritten to
-`(anchor + offset(o + 2), o)`. `distinctOrientations` comes from `rules.json`.
+internal tidiness, and **normalize before committing**. Orientations `o` and `o + 2` cover the
+same footprint with the cells swapped, so `(anchor, o + 2)` is rewritten to
+`(anchor + offset(o + 2), o)`.
 
 ---
 
-## 9. Layout
+## 8. Layout
 
 Three regions, fixed proportions, scaling as a unit. Reference sizing from the brief: board
 region 500×500, tray strip 500×150, rail 190 wide and full height, ~16px gutters, total
@@ -380,70 +357,58 @@ hover states and layout come free.
 
 ---
 
-## 10. Resolved constants
+## 9. Resolved constants
 
 | Constant | Value | Note |
 | -------- | ----- | ---- |
 | setup order | **snake draft** | see below. TODO: verify against rulebook |
-| tie-break | **turn order**, client-side | see below |
-| board size | from the engine's `config.N` | never hardcoded client-side; `n` arrives in the view |
+| tie-break | **turn order**, in the view layer | see below |
+| board size | `config.N` | never hardcoded in the client; `n` arrives in the view |
 
 **Snake draft, stated explicitly.** Each player places `MARKERS_PER_PLAYER` (4) markers, so the
 sequence is four passes alternating direction. Two players:
 `P1 P2 · P2 P1 · P1 P2 · P2 P1`. Three players: `P1 P2 P3 · P3 P2 P1 · P1 P2 P3 · P3 P2 P1`.
 Total placements are `n_players × 4`, and `setupNext` reports whose turn it is. The engine's
-existing per-edge and occupied-slot validation still applies; the snake order governs only *who*
-places next, never *where*.
+per-edge and occupied-slot validation still applies; the snake order governs only *who* places
+next, never *where*.
 
-**Tie-break.** The brief says "break ties by turn order," but the engine's `winner()`
-deliberately returns `None` on a tie. Rather than change verified engine behaviour, the client
-breaks the tie **for display**: on `winner === null` with the game over, rank by score then by
-turn order. The engine's notion of "no single winner" stays intact and the presentation layer
-owns the presentation rule.
-
----
-
-## 11. Testing
-
-Ordered by where the risk actually sits. The first item is the one that matters most, because
-it is what stands between a two-implementation design and silent divergence.
-
-1. **Conformance fixtures**, generated by `tools/gen_rules.py` and committed alongside the
-   generator so they are regenerated rather than hand-maintained:
-   - ring `(row, col, side) → index` for N in 4..8
-   - resolved conns for all 6 tiles × 4 orientations, plus the offset table
-   - `canPlace` vectors: board states harvested from **random Python playouts** × candidate
-     footprints → expected boolean
-   - `markerDestination` vectors: ring occupancy patterns × signed distances → expected slot or
-     null
-
-   The last two are generated from real playouts rather than written by hand, so they cover
-   states nobody thought to imagine. The engine's own final review used random playouts to the
-   same end.
-
-2. **`geometry.ts` hit-testing** — pure unit tests for cells, ring slots, corners and
-   out-of-bounds, over the ring fixture.
-
-3. **Orientation normalization** — every tile at every orientation normalizes into its distinct
-   set, and the normalized move is one the server accepts (trap 2).
-
-4. **Tentative state** — apply, undo and spent-pile bookkeeping are pure client logic with no
-   network; assert the overlay after undo is identical to the committed board, and that a spent
-   pile offers no placements.
-
-5. **View model redaction** — pile *contents* never appear in serialized output.
-
-6. **API smoke test** — play a full two-player game to `game_over` without a browser, reusing
-   the random-playout approach the engine's final review used.
-
-Browser-level end-to-end testing is out of scope for tier 1. The bar is "two people can finish a
-game hot-seat," and items 1–6 cover every mechanism that bar depends on.
+**Tie-break.** The brief says "break ties by turn order," but `winner()` deliberately returns
+`null` on a tie. Rather than change verified engine behaviour, the view layer breaks the tie
+**for display**: on `winner === null` with the game over, rank by score then by turn order. The
+engine's notion of "no single winner" stays intact and the presentation layer owns the
+presentation rule.
 
 ---
 
-## 12. Style
+## 10. Testing
 
-Type hints throughout the Python; strict mode in TypeScript. Pure functions where possible —
-`hitTest`, `canPlace`, `markerDestination` and the normalization helper must all be free of
-rendering and network concerns. Rules data is generated, never hand-transcribed. Engine rule
-constants stay in `config.py`; purely presentational constants live in one client module.
+Ordered by where the risk sits.
+
+1. **The ported suite** — all 1,138 lines' worth of behaviour, translated. This includes the
+   four regression guards the Python build earned the hard way: the trace visited-key must be
+   `(row, col, entry)` not `(row, col)`; `placementId` compared against the previous step only;
+   scoring summed before conversion; and `markerDestination`'s `position !== startSlot` clause.
+2. **The differential oracle** (§3) — the gate on the port itself. Every fixture replayed, digest
+   compared after every action.
+3. **`geometry.ts` hit-testing** — pure unit tests for cells, ring slots, corners and
+   out-of-bounds, checked against `buildRing` in-process.
+4. **Orientation normalization** — every tile at every orientation normalizes into its distinct
+   set, and the normalized move is one `Game.apply` accepts (§7).
+5. **Tentative state** — apply, undo and spent-pile bookkeeping are pure functions; assert the
+   overlay after undo equals the committed board, and that a spent pile offers no placements.
+6. **View redaction** — pile contents unreachable through `GameView`.
+7. **Full-game smoke test** — a random playout in TypeScript from `new` to `phase === "over"`.
+
+**One discipline carried over from the engine build, because it cost real time there:** a test
+that asserts an invariant must be checked for vacuity. Three of the Python engine's tests passed
+while testing nothing, and each was found only by deliberately breaking the behaviour and
+confirming the test failed. Every test added for items 1, 3, 4 and 5 gets that check.
+
+---
+
+## 11. Style
+
+TypeScript strict mode throughout. Pure functions where possible — `hitTest`, `canPlace`,
+`markerDestination` and the normalization helper must all be free of rendering and session
+concerns. `packages/rules` has no runtime dependencies and no knowledge of rendering. Rule
+constants live in `rules/config.ts`; purely presentational constants live in one client module.
