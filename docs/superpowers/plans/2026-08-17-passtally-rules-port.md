@@ -582,6 +582,49 @@ describe("board", () => {
   });
 });
 
+/** partnerOffset's neighbour scan needs its own coverage: the empty-cell case
+ *  above returns on the function's first line and never reaches the loop, so a
+ *  swapped [dr,dc], a wrong delta order or an inverted bounds check would go
+ *  unnoticed. Cells are built by hand because placeTile does not exist yet. */
+describe("partnerOffset", () => {
+  function withTile(n: number, a: [number, number], b: [number, number], pid = 7) {
+    const board = emptyBoard(n);
+    for (const [r, c] of [a, b]) {
+      const cell = board.cells[r]![c]!;
+      cell.placementId = pid;
+      cell.height = 1;
+    }
+    return board;
+  }
+
+  it("finds a horizontal partner from both sides", () => {
+    const b = withTile(6, [2, 2], [2, 3]);
+    expect(partnerOffset(b, 2, 2)).toEqual([0, 1]);
+    expect(partnerOffset(b, 2, 3)).toEqual([0, -1]);
+  });
+
+  it("finds a vertical partner from both sides", () => {
+    const b = withTile(6, [2, 2], [3, 2]);
+    expect(partnerOffset(b, 2, 2)).toEqual([1, 0]);
+    expect(partnerOffset(b, 3, 2)).toEqual([-1, 0]);
+  });
+
+  it("returns null when the partner has been buried", () => {
+    // One half covered by a later tile, so the ids no longer match.
+    const b = withTile(6, [2, 2], [2, 3]);
+    b.cells[2]![3]!.placementId = 9;
+    expect(partnerOffset(b, 2, 2)).toBeNull();
+  });
+
+  it("does not look off the board", () => {
+    const b = emptyBoard(6);
+    const cell = b.cells[0]![0]!;
+    cell.placementId = 7;
+    cell.height = 1;
+    expect(partnerOffset(b, 0, 0)).toBeNull();
+  });
+});
+
 describe("follow", () => {
   it("matches either end of a pair", () => {
     const c = makeCell({
@@ -621,8 +664,11 @@ export class Ring {
 
   constructor(n: number, continuous: boolean = RING_CONTINUOUS) {
     if (!continuous) {
+      // Wording matters: the test matches /not implemented/i. Python's test
+      // matched on the exception TYPE (NotImplementedError), which JS has no
+      // equivalent of, so the message carries the contract here.
       throw new Error(
-        "Only the continuous ring is implemented. To block markers at corners, " +
+        "Discontinuous ring is not implemented. To block markers at corners, " +
           "reimplement Ring.move -- no other module needs to change.",
       );
     }
