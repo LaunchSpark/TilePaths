@@ -131,6 +131,17 @@ Expected: Node 20+ and npm 10+. If either is missing or older, **stop and report
 }
 ```
 
+Root `tsconfig.json` — **required**, because `tsc -b` with no arguments looks for
+`tsconfig.json` in the cwd and fails with TS5083 if only `tsconfig.base.json` exists. Project
+references are used rather than a path argument because plan 2 adds a second package:
+
+```json
+{
+  "files": [],
+  "references": [{ "path": "packages/rules" }]
+}
+```
+
 `packages/rules/package.json`:
 
 ```json
@@ -143,24 +154,25 @@ Expected: Node 20+ and npm 10+. If either is missing or older, **stop and report
 }
 ```
 
-`packages/rules/tsconfig.json`:
+`packages/rules/tsconfig.json` — `composite` is required by project references. **Do not set
+`"rootDir": "src"`**: `include` covers `test` too, and files outside `rootDir` fail with TS6059.
 
 ```json
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
+  "compilerOptions": { "composite": true, "rootDir": ".", "outDir": "dist" },
   "include": ["src", "test"]
 }
 ```
 
-Append to `.gitignore`:
+Append to `.gitignore` — `dist/` is already there from the Python packaging block, so add only:
 
 ```text
 node_modules/
-dist/
 ```
 
-Run `npm install`.
+Run `npm install`, then **verify with the actual script**: `npm run typecheck`. Checking an
+equivalent command with an explicit path does not prove the script works.
 
 - [ ] **Step 3: Write the failing tests**
 
@@ -200,6 +212,19 @@ describe("Side", () => {
 
   it.each(ALL)("two quarter turns equals opposite (%i)", (s) => {
     expect(rotated(s, 2)).toBe(opposite(s));
+  });
+
+  // JS `%` keeps the sign of the dividend where Python's does not, which is
+  // why `rotated` adds +4 before the final modulo. Without these cases,
+  // dropping that guard makes rotated(N, -1) return -1 and no test notices.
+  it.each(ALL)("negative turns match their positive equivalent (%i)", (s) => {
+    expect(rotated(s, -1)).toBe(rotated(s, 3));
+    expect(rotated(s, -2)).toBe(rotated(s, 2));
+    expect(rotated(s, -4)).toBe(s);
+  });
+
+  it.each(ALL)("never leaves the 0..3 range (%i)", (s) => {
+    for (let k = -8; k <= 8; k++) expect([0, 1, 2, 3]).toContain(rotated(s, k));
   });
 });
 
@@ -265,6 +290,16 @@ describe("makeRng", () => {
     const a = [...Array(42).keys()];
     makeRng(3).shuffle(a);
     expect(a).not.toEqual([...Array(42).keys()]);
+  });
+
+  // Without this, a shuffle that ignored the seed entirely -- always applying
+  // a fixed permutation such as arr.reverse() -- would pass every other test
+  // here: deterministic, multiset-preserving, and not the identity.
+  it("depends on the seed", () => {
+    const a = [...Array(42).keys()], b = [...Array(42).keys()];
+    makeRng(1).shuffle(a);
+    makeRng(2).shuffle(b);
+    expect(a).not.toEqual(b);
   });
 });
 ```
