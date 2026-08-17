@@ -46,14 +46,38 @@ describe("rotation", () => {
     }
   });
 
-  // NOTE: the Python original of this test was VACUOUS -- it wrote
-  // `for turns in (0, 4, 8): resolve(tid, turns % 4)`, which is 0 every time,
-  // so it never rotated anything. This version exercises rotConns directly.
-  it.each(IDS)("four single-step rotations return to canonical (tile %i)", (t) => {
+  // Verify that rotConns transforms shapes correctly across all tile cells.
+  // X is 180°-invariant; A and B swap with odd turns; 4-turn cycle returns to canon.
+  // This catches a broken rotConns because shapes would not transform correctly.
+  it.each(IDS)("cell shapes transform correctly under rotation (tile %i)", (t) => {
     for (const cell of TILE_TYPES[t]) {
-      let acc = cell;
-      for (let i = 0; i < 4; i++) acc = rotConns(acc, 1);
-      expect(canon(acc)).toBe(canon(cell));
+      const shape0 = shapeOf(cell);
+      const rot1 = rotConns(cell, 1);
+      const rot2 = rotConns(cell, 2);
+      const rot3 = rotConns(cell, 3);
+      const rot4 = rotConns(rot3, 1);
+
+      const shape1 = shapeOf(rot1);
+      const shape2 = shapeOf(rot2);
+      const shape3 = shapeOf(rot3);
+      const shape4 = shapeOf(rot4);
+
+      // After 2 and 4 turns, shape is unchanged
+      expect(shape2).toBe(shape0);
+      expect(shape4).toBe(shape0);
+
+      // After odd turns: X stays X, A↔B
+      if (shape0 === "X") {
+        expect(shape1).toBe("X");
+        expect(shape3).toBe("X");
+      } else {
+        expect(shape1).not.toBe(shape0);
+        expect(shape3).not.toBe(shape0);
+        expect(shape1).toBe(shape3);
+      }
+
+      // 4-turn cycle returns to canonical form
+      expect(canon(rot4)).toBe(canon(cell));
     }
   });
 
