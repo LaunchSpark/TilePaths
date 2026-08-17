@@ -181,3 +181,6 @@ cython_debug/
 .cursorindexingignore
 # Superpowers SDD scratch (ledger, briefs, review packages)
 .superpowers/
+
+node_modules/
+dist/
