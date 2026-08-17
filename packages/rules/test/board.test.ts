@@ -62,6 +62,65 @@ describe("board", () => {
   });
 });
 
+describe("partnerOffset", () => {
+  it("finds horizontal right neighbor with matching placementId", () => {
+    const b = emptyBoard(6);
+    b.cells[2]![2]! = makeCell({ placementId: 1, height: 1, conns: [] });
+    b.cells[2]![3]! = makeCell({ placementId: 1, height: 1, conns: [] });
+    expect(partnerOffset(b, 2, 2)).toEqual([0, 1]);
+    expect(partnerOffset(b, 2, 3)).toEqual([0, -1]);
+  });
+
+  it("finds horizontal left neighbor with matching placementId", () => {
+    const b = emptyBoard(6);
+    b.cells[3]![4]! = makeCell({ placementId: 2, height: 1, conns: [] });
+    b.cells[3]![3]! = makeCell({ placementId: 2, height: 1, conns: [] });
+    expect(partnerOffset(b, 3, 4)).toEqual([0, -1]);
+    expect(partnerOffset(b, 3, 3)).toEqual([0, 1]);
+  });
+
+  it("finds vertical down neighbor with matching placementId", () => {
+    const b = emptyBoard(6);
+    b.cells[1]![1]! = makeCell({ placementId: 3, height: 1, conns: [] });
+    b.cells[2]![1]! = makeCell({ placementId: 3, height: 1, conns: [] });
+    expect(partnerOffset(b, 1, 1)).toEqual([1, 0]);
+    expect(partnerOffset(b, 2, 1)).toEqual([-1, 0]);
+  });
+
+  it("finds vertical up neighbor with matching placementId", () => {
+    const b = emptyBoard(6);
+    b.cells[4]![2]! = makeCell({ placementId: 4, height: 1, conns: [] });
+    b.cells[3]![2]! = makeCell({ placementId: 4, height: 1, conns: [] });
+    expect(partnerOffset(b, 4, 2)).toEqual([-1, 0]);
+    expect(partnerOffset(b, 3, 2)).toEqual([1, 0]);
+  });
+
+  it("returns null when all neighbors have different placementIds", () => {
+    const b = emptyBoard(6);
+    b.cells[2]![2]! = makeCell({ placementId: 5, height: 1, conns: [] });
+    b.cells[1]![2]! = makeCell({ placementId: 10, height: 1, conns: [] });
+    b.cells[3]![2]! = makeCell({ placementId: 11, height: 1, conns: [] });
+    b.cells[2]![1]! = makeCell({ placementId: 12, height: 1, conns: [] });
+    b.cells[2]![3]! = makeCell({ placementId: 13, height: 1, conns: [] });
+    expect(partnerOffset(b, 2, 2)).toBeNull();
+  });
+
+  it("returns null when no neighbors share placementId (buried partner)", () => {
+    const b = emptyBoard(6);
+    b.cells[2]![2]! = makeCell({ placementId: 6, height: 2, conns: [] });
+    // All neighbors either empty or have different IDs
+    expect(partnerOffset(b, 2, 2)).toBeNull();
+  });
+
+  it("does not crash on edge cell with no out-of-bounds partner", () => {
+    const b = emptyBoard(6);
+    b.cells[0]![0]! = makeCell({ placementId: 7, height: 1, conns: [] });
+    b.cells[0]![1]! = makeCell({ placementId: 7, height: 1, conns: [] });
+    // Top-left has only right and down neighbors in bounds
+    expect(partnerOffset(b, 0, 0)).toEqual([0, 1]);
+  });
+});
+
 describe("follow", () => {
   it("matches either end of a pair", () => {
     const c = makeCell({
