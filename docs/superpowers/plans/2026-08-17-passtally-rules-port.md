@@ -1406,6 +1406,34 @@ describe("trace", () => {
     expect(trace(b, west)).toEqual([east, 3]);
     expect(trace(b, east)).toEqual([west, 3]);
   });
+
+  /** THE test for the (row, col, entry) visited key. Ported from the Python
+   *  suite's tests/test_trace.py, where it was added by the engine's final
+   *  review after cell-only keying passed all 170 prior tests.
+   *
+   *  From (1,1) entering W: X routes W->E into (1,2); B there routes W->N
+   *  into (0,2); A routes S->W into (0,1); B there routes E->S, landing back
+   *  on (1,1) -- entering through N this time, a different face than the
+   *  original W. The line then routes N->S through (1,1) and continues south
+   *  through the cross tiles at (2,1)/(3,1) and off the board.
+   *
+   *  placeTile is used as a low-level primitive here: it writes connsA to
+   *  posA and connsB to posB without checking the positions match the
+   *  orientation's offset, which is what lets the board be hand-built. */
+  it("keeps counting when a line re-enters a cell through a different face", () => {
+    const b = emptyBoard(4);
+    placeTile(b, [0, 1], [0, 2], 1, 0);   // (0,1)=B, (0,2)=A
+    placeTile(b, [1, 1], [1, 2], 4, 0);   // (1,1)=X, (1,2)=B
+    placeTile(b, [2, 1], [3, 1], 2, 0);   // extends the line south to the border
+
+    const [end, passes] = traceFrom(b, 1, 1, Side.W);
+
+    expect(end).not.toBe(Result.LOOP);
+    expect(end).toBe(slotIndexOf(4, 3, 1, Side.S));
+    // 1 ((1,1) first visit) + 1 ((0,1)/(0,2) tile, seam-crossed)
+    // + 1 ((1,1) second visit, different face) + 1 ((2,1)/(3,1) tile) = 4
+    expect(passes).toBe(4);
+  });
 });
 ```
 
@@ -2000,6 +2028,38 @@ describe("scoring and end", () => {
     expect(g.isOver()).toBe(true);
   });
 
+  /** The two trigger clauses mask each other: the only test above empties the
+   *  piles, which satisfies BOTH at once, so deleting either one leaves the
+   *  suite green. These two cover them separately. Ported from the Python
+   *  suite, where the engine's final review added them for this reason. */
+  it("fires the trigger when piles are exhausted with board room to spare", () => {
+    const g = setup(2, 1, 6);
+    for (const p of g.piles) { p.ordered.length = 0; p.faceUp = null; }
+    expect(g.triggerFired()).toBe(true);
+  });
+
+  /** A 3x3 board tiled so every remaining orthogonal pair is either
+   *  height-mismatched or shares a placement id, while a pile still holds a
+   *  face-up tile. Only the "no legal placement" branch can fire here.
+   *
+   *      (0,0)=1/A  (0,1)=0/.   (0,2)=1/B
+   *      (1,0)=2/D  (1,1)=2/D   (1,2)=1/B
+   *      (2,0)=0/.  (2,1)=1/C   (2,2)=0/.
+   *
+   *  A and C support D's stack; B straddles its own two cells; the three
+   *  empty cells are pairwise non-adjacent, so no empty pair opens up either. */
+  it("fires the trigger when no footprint fits though a pile remains", () => {
+    const g = Game.newGame(2, 1, 3);
+    placeTile(g.board, [0, 0], [1, 0], 2, 0);   // A
+    placeTile(g.board, [0, 2], [1, 2], 2, 0);   // B
+    placeTile(g.board, [1, 1], [2, 1], 2, 0);   // C
+    placeTile(g.board, [1, 0], [1, 1], 2, 3);   // D, stacked on A/C
+
+    expect(g.legalMoves().some((m) => m.kind === "place")).toBe(false);
+    expect(g.piles.some((p) => p.faceUp !== null)).toBe(true);
+    expect(g.triggerFired()).toBe(true);
+  });
+
   it("gives three players a two-turn tail", () => {
     const g = setup(3);
     for (const p of g.piles) { p.ordered.length = 0; p.faceUp = null; }
@@ -2351,7 +2411,10 @@ export class Game {
     if (this.finalRound && this.currentPlayer === this.firstPlayer) this.over = true;
   }
 
-  private triggerFired(): boolean {
+  /** Internal, but deliberately NOT `private`: each clause needs its own test
+   *  and they mask each other otherwise. Python's `_trigger_fired` was
+   *  likewise underscore-prefixed rather than truly inaccessible. */
+  triggerFired(): boolean {
     // Clause 1 is provably subsumed by clause 2 -- legalMoves skips piles whose
     // faceUp is null, so exhausted piles emit no placement and clause 2 already
     // returns true. Kept as a fast path: it answers a yes/no question without
