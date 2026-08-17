@@ -84,8 +84,10 @@ describe("setup", () => {
   it("reports completeness", () => {
     const g = Game.newGame(2, 1, 6);
     expect(g.isSetupComplete()).toBe(false);
-    const done = setup();
-    expect(done.isSetupComplete()).toBe(true);
+    for (let edge = 0; edge < 4; edge++) g.setupPlaceMarker(0, edge * 6);
+    expect(g.isSetupComplete()).toBe(false);   // player 1 still has none
+    for (let edge = 0; edge < 4; edge++) g.setupPlaceMarker(1, edge * 6 + 1);
+    expect(g.isSetupComplete()).toBe(true);
   });
 
   it("refuses play before setup is complete", () => {
@@ -132,6 +134,11 @@ describe("turns", () => {
 
   it("rejects a negative pile index", () => {
     expect(() => setup().apply(place(-1, [2, 2], [3, 2], 0))).toThrow();
+  });
+
+  it("rejects an out-of-range pile index", () => {
+    const g = setup();
+    expect(() => g.apply(place(g.piles.length, [2, 2], [3, 2], 0))).toThrow();
   });
 
   it("rejects an out-of-range orientation", () => {
@@ -212,6 +219,34 @@ describe("scoring and end", () => {
   it("has no winner before the end", () => {
     const g = setup();
     expect(g.isOver()).toBe(false);
+    expect(g.winner()).toBeNull();
+  });
+
+  it("winner is the high scorer", () => {
+    const g = setup();
+    g.players[0]!.score = 10;
+    g.players[1]!.score = 4;
+    g.over = true;
+    expect(g.winner()).toBe(0);
+  });
+
+  it("a tie has no winner", () => {
+    const g = setup();
+    g.players[0]!.score = 5;
+    g.players[1]!.score = 5;
+    g.over = true;
+    expect(g.winner()).toBeNull();
+  });
+
+  /** Not in the Python suite, but the tie logic warrants it: two players tied
+   *  for the lead above a third must still yield no winner -- distinguishing
+   *  "exactly one leader" from ">= 2 leaders" rather than just "all equal". */
+  it("three players, two tied for the lead, has no winner", () => {
+    const g = setup(3);
+    g.players[0]!.score = 10;
+    g.players[1]!.score = 10;
+    g.players[2]!.score = 3;
+    g.over = true;
     expect(g.winner()).toBeNull();
   });
 

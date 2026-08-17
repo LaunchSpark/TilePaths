@@ -52,6 +52,9 @@ describe("legalMoves", () => {
   it("generates moves for every marker", () => {
     const ms = markers(setup().legalMoves());
     expect(new Set(ms.map((m) => m.markerIndex))).toEqual(new Set([0, 1, 2, 3]));
+    for (const m of ms) {
+      expect((MARKER_DISTANCES as readonly number[]).includes(m.distance)).toBe(true);
+    }
   });
 
   /** +1 and -1 land on the same slot only when the ring is saturated. For a
