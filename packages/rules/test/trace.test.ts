@@ -75,4 +75,30 @@ describe("trace", () => {
     expect(trace(b, west)).toEqual([east, 3]);
     expect(trace(b, east)).toEqual([west, 3]);
   });
+
+  /** Re-entering the same cell through a different face is legal and must keep
+   *  counting -- the visited key must include the entry face, not just
+   *  (row, col). Without that, this line is wrongly reported as a LOOP with a
+   *  truncated pass count instead of reaching its real endpoint.
+   *
+   *  Tracing from (1,1) entering W: X routes W->E into (1,2); B there routes
+   *  W->N into (0,2); A routes S->W into (0,1); B there routes E->S, landing
+   *  back on (1,1) -- but entering through N this time, a different face than
+   *  the original W entry. The line then routes N->S through (1,1) and
+   *  continues south through the cross tiles at (2,1)/(3,1) and off the board.
+   */
+  it("keeps counting when a line re-enters a cell through a different face", () => {
+    const b = emptyBoard(4);
+    placeTile(b, [0, 1], [0, 2], 1, 0);   // (0,1)=B, (0,2)=A
+    placeTile(b, [1, 1], [1, 2], 4, 0);   // (1,1)=X, (1,2)=B
+    placeTile(b, [2, 1], [3, 1], 2, 0);   // extends the line south to the border
+
+    const [end, passes] = traceFrom(b, 1, 1, Side.W);
+
+    expect(end).not.toBe(Result.LOOP);
+    expect(end).toBe(slotIndexOf(4, 3, 1, Side.S));
+    // 1 ((1,1) first visit) + 1 ((0,1)/(0,2) tile, seam-crossed)
+    // + 1 ((1,1) second visit, different face) + 1 ((2,1)/(3,1) tile) = 4
+    expect(passes).toBe(4);
+  });
 });
