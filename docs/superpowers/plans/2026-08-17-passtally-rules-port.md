@@ -1126,6 +1126,8 @@ Port `passtally/placement.py` (43 lines). **`canPlace` takes no tile or orientat
 import { describe, expect, it } from "vitest";
 import { at, emptyBoard } from "../src/board.js";
 import { canPlace, placeTile } from "../src/placement.js";
+import { canon, resolve } from "../src/tileTypes.js";
+import { Side } from "../src/types.js";
 
 describe("canPlace", () => {
   it("allows empty adjacent cells", () => {
@@ -1177,11 +1179,38 @@ describe("canPlace", () => {
   it("does not mutate", () => {
     const b = emptyBoard(6);
     placeTile(b, [0, 0], [1, 0], 2, 0);
-    const before = JSON.stringify(b.cells);
+    // Covers ring and nextPlacementId too, not just cells. `nav` is a Ring
+    // instance and not usefully JSON-comparable, so compare plain data only.
+    const snapshot = () => JSON.stringify([b.cells, b.ring, b.nextPlacementId]);
+    const before = snapshot();
     canPlace(b, [0, 0], [0, 1]);
     canPlace(b, [0, 0], [1, 0]);
     canPlace(b, [3, 3], [3, 4]);
-    expect(JSON.stringify(b.cells)).toBe(before);
+    expect(snapshot()).toBe(before);
+  });
+});
+
+/** `resolve` returns entries from a module-level cache built once at load, so
+ *  placeTile must COPY the conns rather than alias them. Without these tests a
+ *  reversion to `cell.conns = conns` passes the whole suite while silently
+ *  corrupting the rotation cache for every later placement of that tile. */
+describe("placeTile does not alias the rotation cache", () => {
+  it("gives the cell its own conns array", () => {
+    const b = emptyBoard(6);
+    placeTile(b, [0, 0], [1, 0], 2, 0);
+    expect(at(b, [0, 0]).conns).not.toBe(resolve(2, 0)[0]);
+    expect(at(b, [1, 0]).conns).not.toBe(resolve(2, 0)[1]);
+  });
+
+  it("survives in-place mutation of a placed cell", () => {
+    const original = canon(resolve(2, 0)[0]);
+    const b = emptyBoard(6);
+    placeTile(b, [0, 0], [1, 0], 2, 0);
+
+    at(b, [0, 0]).conns[0]![0] = Side.W;      // corrupt the placed cell
+    at(b, [0, 0]).conns.push([Side.N, Side.N]);
+
+    expect(canon(resolve(2, 0)[0])).toBe(original);
   });
 });
 
