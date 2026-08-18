@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Passtally</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main id="app">
+      <section id="board-region"><canvas id="board" width="500" height="500"></canvas></section>
+      <aside id="rail">
+        <div id="players"></div>
+        <div id="log"></div>
+      </aside>
+      <section id="tray">
+        <div id="piles"></div>
+        <div id="tray-right">
+          <span id="actions">actions left: 2</span>
+          <button id="commit" disabled>commit</button>
+        </div>
+      </section>
+      <p id="status" role="status"></p>
+    </main>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
