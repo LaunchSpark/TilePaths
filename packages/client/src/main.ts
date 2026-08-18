@@ -5,7 +5,7 @@ import { LocalSession } from "./session.js";
 import { Controller } from "./state.js";
 import { renderLog } from "./ui/log.js";
 import { renderPlayers } from "./ui/rail.js";
-import { renderTray } from "./ui/tray.js";
+import { renderTray, TILE_DRAG_TYPE } from "./ui/tray.js";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#board")!;
 const ctx = canvas.getContext("2d")!;
@@ -46,23 +46,63 @@ function render(): void {
   }
 }
 
+function boardPoint(clientX: number, clientY: number): [number, number] {
+  const rect = canvas.getBoundingClientRect();
+  return [
+    (clientX - rect.left) * canvas.width / rect.width,
+    (clientY - rect.top) * canvas.height / rect.height,
+  ];
+}
+
+function updateHover(clientX: number, clientY: number): void {
+  const [x, y] = boardPoint(clientX, clientY);
+  const hit = hitTest(x, y, layout);
+  hoverCell = hit.kind === "cell" ? [hit.row, hit.col] : null;
+}
+
 controller.onChange = render;
 
 canvas.addEventListener("mousemove", (event) => {
-  const rect = canvas.getBoundingClientRect();
-  const hit = hitTest(event.clientX - rect.left, event.clientY - rect.top, layout);
-  const next: [number, number] | null = hit.kind === "cell" ? [hit.row, hit.col] : null;
-  const changed = JSON.stringify(next) !== JSON.stringify(hoverCell);
-  hoverCell = next;
+  const before = hoverCell;
+  updateHover(event.clientX, event.clientY);
+  const changed = JSON.stringify(hoverCell) !== JSON.stringify(before);
   if (changed) render();
 });
 
 canvas.addEventListener("click", (event) => {
-  const rect = canvas.getBoundingClientRect();
+  const [x, y] = boardPoint(event.clientX, event.clientY);
   controller.handleAndRender({
     kind: "click",
-    hit: hitTest(event.clientX - rect.left, event.clientY - rect.top, layout),
+    hit: hitTest(x, y, layout),
   });
+});
+
+canvas.addEventListener("dragover", (event) => {
+  if (!event.dataTransfer?.types.includes(TILE_DRAG_TYPE)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "move";
+  updateHover(event.clientX, event.clientY);
+  drawBoard(ctx, layout, controller, hoverCell);
+});
+
+canvas.addEventListener("dragleave", (event) => {
+  if (event.relatedTarget !== null && canvas.contains(event.relatedTarget as Node)) return;
+  hoverCell = null;
+  drawBoard(ctx, layout, controller, hoverCell);
+});
+
+canvas.addEventListener("drop", (event) => {
+  if (event.dataTransfer === null) return;
+  const rawPileIndex = event.dataTransfer.getData(TILE_DRAG_TYPE);
+  if (!/^\d+$/.test(rawPileIndex)) return;
+  const pileIndex = Number(rawPileIndex);
+  event.preventDefault();
+  if (controller.selectedPile !== pileIndex) {
+    controller.handle({ kind: "selectPile", pileIndex });
+  }
+  const [x, y] = boardPoint(event.clientX, event.clientY);
+  hoverCell = null;
+  controller.handleAndRender({ kind: "click", hit: hitTest(x, y, layout) });
 });
 
 canvas.addEventListener("wheel", (event) => {

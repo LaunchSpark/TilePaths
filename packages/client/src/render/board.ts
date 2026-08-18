@@ -41,13 +41,22 @@ export function drawBoard(
     }
   }
 
-  ctx.strokeStyle = "#1b1b1b";
-  ctx.lineWidth = 1.5;
+  // One 2:1 outline per placement makes the two occupied cells read as a
+  // physical domino. Only the north/west cell draws, so each tile appears once.
   for (let row = 0; row < view.n; row++) {
     for (let col = 0; col < view.n; col++) {
-      if (view.cells[row]![col]!.partner === null) continue;
-      const rect = cellRect(layout, row, col);
-      ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+      const partner = view.cells[row]![col]!.partner;
+      if (partner === null) continue;
+      const [dr, dc] = partner;
+      if (dr < 0 || dc < 0) continue;
+      const first = cellRect(layout, row, col);
+      const second = cellRect(layout, row + dr, col + dc);
+      strokeRect(ctx, {
+        x: Math.min(first.x, second.x),
+        y: Math.min(first.y, second.y),
+        w: Math.max(first.x + first.w, second.x + second.w) - Math.min(first.x, second.x),
+        h: Math.max(first.y + first.h, second.y + second.h) - Math.min(first.y, second.y),
+      }, "#1b1b1b", 2);
     }
   }
 
@@ -71,12 +80,28 @@ export function drawBoard(
     if (faceUp !== null) {
       const [dr, dc] = offsetOf(controller.ghostOrientation);
       ctx.globalAlpha = 0.55;
-      for (const [row, col] of [hoverCell, [hoverCell[0] + dr, hoverCell[1] + dc]]) {
+      const ghostCells: [number, number][] = [
+        hoverCell,
+        [hoverCell[0] + dr, hoverCell[1] + dc],
+      ];
+      const visibleRects: Rect[] = [];
+      for (const [row, col] of ghostCells) {
         if (row! < 0 || col! < 0 || row! >= view.n || col! >= view.n) continue;
         const rect = cellRect(layout, row!, col!);
+        visibleRects.push(rect);
         ctx.fillStyle = levelFill(view.cells[row!]![col!]!.height + 1);
         ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
-        strokeRect(ctx, rect, "#2f6fd0", 2);
+      }
+      if (visibleRects.length === 2) {
+        const [first, second] = visibleRects as [Rect, Rect];
+        strokeRect(ctx, {
+          x: Math.min(first.x, second.x),
+          y: Math.min(first.y, second.y),
+          w: Math.max(first.x + first.w, second.x + second.w) - Math.min(first.x, second.x),
+          h: Math.max(first.y + first.h, second.y + second.h) - Math.min(first.y, second.y),
+        }, "#2f6fd0", 3);
+      } else {
+        for (const rect of visibleRects) strokeRect(ctx, rect, "#2f6fd0", 3);
       }
       ctx.globalAlpha = 1;
     }

@@ -30,9 +30,18 @@ body {
 #log { flex: 1; overflow-y: auto; font-size: 12px; }
 #log ol { margin: 0; padding-left: 1.4em; }
 
-#piles { display: flex; gap: 12px; }
+#piles { display: flex; align-items: flex-start; gap: 12px; }
 .pile { width: 64px; text-align: center; }
-.pile canvas { border: 2px solid transparent; background: var(--paper); display: block; }
+.pile canvas {
+  display: block;
+  width: 64px;
+  height: 128px;
+  border: 2px solid transparent;
+  background: var(--paper);
+  cursor: grab;
+}
+.pile canvas:not([draggable="true"]) { cursor: default; }
+.pile.dragging canvas { cursor: grabbing; opacity: 0.7; }
 .pile.selected canvas { border-color: #2f6fd0; }
 .pile.spent canvas { opacity: 0.35; }
 .pile.empty canvas { opacity: 0.25; }
