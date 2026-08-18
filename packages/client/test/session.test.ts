@@ -56,10 +56,31 @@ describe("setup", () => {
 });
 
 describe("commit", () => {
-  it("requires exactly the remaining actions", () => {
+  it("accepts a partial commit but rejects empty or oversized commits", () => {
     const session = playing();
-    expect(() => session.commit([place(0, [2, 2], [3, 2], 0)])).toThrow(/2 moves/);
-    expect(() => session.commit([])).toThrow(/2 moves/);
+    expect(session.commit([place(0, [2, 2], [3, 2], 0)])).toBeNull();
+    expect(session.getView().currentPlayer).toBe(0);
+    expect(session.getView().actionsLeft).toBe(1);
+    expect(() => session.commit([])).toThrow(/between 1 and 1/i);
+    expect(() => session.commit([
+      place(1, [2, 4], [3, 4], 0),
+      marker(0, 1),
+    ])).toThrow(/between 1 and 1/i);
+  });
+
+  it("reveals a replacement when the first move is committed", () => {
+    const session = playing();
+    const before = session.getView().piles[0]!;
+    const ordered = session.game.piles[0]!.ordered;
+    const expectedReplacement = ordered[ordered.length - 1]!;
+
+    const result = session.commit([place(0, [2, 2], [3, 2], 0)]);
+
+    const after = session.getView().piles[0]!;
+    expect(result).toBeNull();
+    expect(after.count).toBe(before.count - 1);
+    expect(after.faceUp).toBe(expectedReplacement);
+    expect(session.getView().players[0]!.score).toBe(0);
   });
 
   it("advances the game and the pile", () => {
@@ -90,6 +111,8 @@ describe("commit", () => {
     for (let col = 0; col < 3; col++) session.dropCrossTileForTest(col);
 
     const result = session.commit([marker(0, 1), marker(0, -1)]);
+    expect(result).not.toBeNull();
+    if (result === null) throw new Error("expected the turn to end");
     expect(result.player).toBe(0);
     expect(result.totalPasses).toBe(3);
     expect(result.vpAwarded).toBe(2);
@@ -106,6 +129,8 @@ describe("commit", () => {
     const session = new LocalSession(game);
 
     const result = session.commit([marker(0, 1), marker(0, -1)]);
+    expect(result).not.toBeNull();
+    if (result === null) throw new Error("expected the turn to end");
 
     expect(result.totalPasses).toBe(1);
     expect(result.vpAwarded).toBe(1);
@@ -114,6 +139,8 @@ describe("commit", () => {
 
   it("reports no lines when nothing scores", () => {
     const result = playing().commit([marker(0, 1), marker(0, -1)]);
+    expect(result).not.toBeNull();
+    if (result === null) throw new Error("expected the turn to end");
     expect(result.lines).toEqual([]);
     expect(result.totalPasses).toBe(0);
     expect(result.vpAwarded).toBe(0);

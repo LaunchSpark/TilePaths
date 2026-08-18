@@ -92,7 +92,7 @@ The committed `Game` sits behind an interface, so the rendering layer never touc
 interface Session {
   getView(): GameView                                    // redacted
   placeSetupMarker(player: number, slot: number): void
-  commit(moves: Move[]): TurnResult
+  commit(moves: Move[]): TurnResult | null             // null when the turn continues
 }
 ```
 
@@ -209,29 +209,32 @@ dict — `commit` calls it directly.
 
 ## 5. Tentative turns
 
-**The committed `Game` has no tentative state.** The client owns exploration entirely and the
-session only ever receives completed turns.
+**The committed `Game` has no tentative state.** The client owns exploration entirely. The
+session accepts one or more pending actions up to the remaining action budget; committing the
+first action locks it without ending the turn, while committing the second scores and advances.
 
 This follows from what the commitment rules are *for*: a player may try combinations of the
 available tiles and put them back, so long as **no new information is revealed**. Turning over a
 replacement is the irreversible act — once seen it cannot be unseen, so the placement that
 caused it is locked in. Replacements are therefore turned over at commit, not at placement.
 
-The consequence: **a pile you have tentatively placed from shows nothing**, so there is nothing
-to place from it a second time. "A spent pile is done for the turn" is not a restriction anyone
-imposes — it falls out of the reveal timing.
+The consequence: **a pile you have tentatively placed from shows nothing**, so it cannot be used
+again within the same uncommitted batch. Once that action is committed, its replacement is
+revealed and may be selected for the second action.
 
 The client holds:
 
-- an ordered list of at most two tentative moves
+- an ordered list of tentative moves up to the current committed action budget
 - a local board overlay derived by applying them to the committed `cells`
 - a per-pile `spent` flag, marking piles consumed this turn
 
-Undo drops the last move and recomputes the overlay.
+Undo drops the last uncommitted move and recomputes the overlay. It cannot undo an action whose
+replacement has already been revealed.
 
 `Game.apply()` still pops the replacement when it applies a placement. That is a detail *inside*
-the session: it happens at commit, and the UI learns the new face-up tiles from the returned
-view — exactly when a player would turn them over.
+the session: it happens at each commit, and the UI learns the new face-up tile from the returned
+view — exactly when a player would turn it over. A partial commit returns no `TurnResult`; only
+the commit that ends the turn returns scoring details for the log.
 
 **Setup placements are not tentative.** Each commits immediately via `placeSetupMarker`. Nothing
 is revealed by placing one, so there is nothing to explore. `LocalSession` enforces the snake
@@ -248,7 +251,7 @@ idle ──1/2/3──────────────────> tile_sel
 idle ──click own marker───────> marker_selected
 tile_selected   ──click legal anchor──> idle    (actionsLeft - 1, pile marked spent)
 marker_selected ──click destination───> idle    (actionsLeft - 1)
-idle ──Enter, actionsLeft == 0──> committing ──> idle | game_over
+idle ──Enter, pending action────> committing ──> idle | game_over
 any  ──Esc──> idle
 idle ──Backspace──> idle        (undo last tentative)
 ```
@@ -329,18 +332,18 @@ grid cells so the two read as one object. At N = 6 in a 500px region a unit is 6
 The ring is separate because it matches the data model (`ring` is a flat 4N array, `cells` is
 N×N), and because hit-testing then never has to disambiguate a marker click from a cell click.
 
-**Tray strip** — one horizontal strip, because committing a turn is a single decision:
+**Tray strip** — one horizontal strip with a staged commit control:
 
 ```text
-[pile 1] [pile 2] [pile 3]  ·····  actions left: 2  ·  [ commit ]
+[pile 1] [pile 2] [pile 3]  ·····  actions left: 2  ·  [ Commit Move ]
 ```
 
 Each pile shows its face-up tile at the same aspect and line style as the board, so connections
 can be judged before picking it up. **A pile spent this turn renders as visibly used with
 nothing revealed** — and un-spends visibly on undo, which is the clearest available signal that
 the undo landed. An empty pile stays in place, greyed, showing 0 — it is an end-game trigger and
-hiding it hides that. Commit is the only high-emphasis control and is disabled until both
-actions are spent.
+hiding it hides that. Commit is the only high-emphasis control. It reads **Commit Move** for the
+first action and **End Turn** for the second, and is enabled whenever an action is pending.
 
 **Elevation encoding — two channels**, because level drives both the support rule and the pass
 multiplier. A lightness ramp keyed to level for "where are the tall stacks" at a glance, plus a

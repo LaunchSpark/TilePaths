@@ -1,4 +1,3 @@
-import { config } from "@passtally/rules";
 import type { Game, Move } from "@passtally/rules";
 import type { LocalSession } from "./session.js";
 import type { GameView } from "./types.js";
@@ -52,9 +51,5 @@ export class Tentative {
       board: this.overlayGame().board,
       actionsLeft: this.actionsLeft(),
     });
-  }
-
-  isComplete(): boolean {
-    return this.actionsLeft() === 0 && this.pending.length === config.ACTIONS_PER_TURN;
   }
 }

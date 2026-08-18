@@ -47,6 +47,10 @@ export class Controller {
     return this.tentative.isSpent(pileIndex);
   }
 
+  get pendingActions(): number {
+    return this.tentative.moves.length;
+  }
+
   handle(input: UiInput): void {
     this.lastRejection = null;
     try {
@@ -150,12 +154,13 @@ export class Controller {
   }
 
   private onCommit(): void {
-    if (!this.tentative.isComplete()) {
-      throw new Error(`a turn needs ${config.ACTIONS_PER_TURN} actions before committing`);
+    if (this.tentative.moves.length === 0) {
+      throw new Error("choose an action before committing");
     }
     this.state = "committing";
     try {
-      this.log.push(this.session.commit([...this.tentative.moves]));
+      const result = this.session.commit([...this.tentative.moves]);
+      if (result !== null) this.log.push(result);
       this.tentative.clear();
       this.clearSelection();
       this.state = this.session.getView().phase === "over" ? "gameOver" : "idle";

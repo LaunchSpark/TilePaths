@@ -6,7 +6,8 @@ import { buildView, nextSetupPlayer } from "./view.js";
 export interface Session {
   getView(): GameView;
   placeSetupMarker(player: number, slot: number): void;
-  commit(moves: Move[]): TurnResult;
+  /** Returns a result only when this commit completes the turn. */
+  commit(moves: Move[]): TurnResult | null;
 }
 
 export class LocalSession implements Session {
@@ -33,16 +34,22 @@ export class LocalSession implements Session {
     this.committed.setupPlaceMarker(player, slot);
   }
 
-  commit(moves: Move[]): TurnResult {
+  commit(moves: Move[]): TurnResult | null {
     const need = this.committed.actionsLeft;
-    if (moves.length !== need) {
-      throw new Error(`a turn needs exactly ${need} moves, got ${moves.length}`);
+    if (moves.length === 0 || moves.length > need) {
+      throw new Error(`commit needs between 1 and ${need} moves, got ${moves.length}`);
     }
     const actor = this.committed.currentPlayer;
     const before = this.committed.players[actor]!.score;
 
     const trial = this.committed.clone();
     for (const move of moves) trial.apply(move);
+
+    const turnEnded = trial.currentPlayer !== actor || trial.isOver();
+    if (!turnEnded) {
+      this.committed = trial;
+      return null;
+    }
 
     const lines = [...scoreLines(trial.board, trial.players[actor]!.markerSlots)]
       .map(([key, passes]) => {
@@ -62,7 +69,8 @@ export class LocalSession implements Session {
   legalTurns(): Move[] | null {
     const trial = this.committed.clone();
     const picked: Move[] = [];
-    for (let i = 0; i < config.ACTIONS_PER_TURN; i++) {
+    const actions = this.committed.actionsLeft;
+    for (let i = 0; i < actions; i++) {
       const move = trial.legalMoves()[0];
       if (move === undefined) return null;
       trial.apply(move);

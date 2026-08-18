@@ -75,17 +75,15 @@ function render(): void {
   rotateLeftButton.disabled = !canRotate;
   rotateRightButton.disabled = !canRotate;
   rotationLabel.textContent = `${controller.ghostOrientation * 90}°`;
-  commitButton.disabled = view.phase !== "play" || view.actionsLeft !== 0;
-  commitButton.textContent = view.phase !== "play"
-    ? "commit"
-    : view.actionsLeft === 0
-      ? "commit turn"
-      : view.actionsLeft === config.ACTIONS_PER_TURN
-        ? `take ${config.ACTIONS_PER_TURN} actions`
-        : `${view.actionsLeft} more action`;
-  commitButton.title = view.phase === "play" && view.actionsLeft > 0
-    ? `Passtally turns require ${config.ACTIONS_PER_TURN} actions.`
-    : "Commit the completed turn";
+  const endingTurn = view.phase === "play"
+    && (controller.session.game.actionsLeft === 1 || view.actionsLeft === 0);
+  commitButton.disabled = view.phase !== "play" || controller.pendingActions === 0;
+  commitButton.textContent = endingTurn ? "End Turn" : "Commit Move";
+  commitButton.title = controller.pendingActions === 0
+    ? "Choose an action first"
+    : endingTurn
+      ? "Commit this move, score, and end the turn"
+      : "Commit this move and continue the turn";
 
   if (controller.lastRejection !== null) {
     status.textContent = controller.lastRejection;

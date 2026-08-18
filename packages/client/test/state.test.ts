@@ -157,12 +157,45 @@ describe("undo, escape and commit", () => {
     expect(current.view().cells[2]![2]!.height).toBe(0);
   });
 
-  it("refuses to commit before both actions are spent", () => {
+  it("refuses to commit without a pending action", () => {
     const current = controller();
     driveSetup(current);
     current.handle({ kind: "commit" });
     expect(current.lastRejection).not.toBeNull();
     expect(current.view().currentPlayer).toBe(0);
+  });
+
+  it("commits one move without ending the turn", () => {
+    const current = controller();
+    driveSetup(current);
+    const countBefore = current.view().piles[0]!.count;
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 2 } });
+
+    current.handle({ kind: "commit" });
+
+    expect(current.lastRejection).toBeNull();
+    expect(current.view().currentPlayer).toBe(0);
+    expect(current.view().actionsLeft).toBe(1);
+    expect(current.view().piles[0]!.count).toBe(countBefore - 1);
+    expect(current.pendingActions).toBe(0);
+    expect(current.log).toEqual([]);
+  });
+
+  it("ends and logs the turn when the second move is committed", () => {
+    const current = controller();
+    driveSetup(current);
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 2 } });
+    current.handle({ kind: "commit" });
+    current.handle({ kind: "selectPile", pileIndex: 1 });
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 4 } });
+
+    current.handle({ kind: "commit" });
+
+    expect(current.view().currentPlayer).toBe(1);
+    expect(current.view().actionsLeft).toBe(2);
+    expect(current.log).toHaveLength(1);
   });
 
   it("commits a full turn, logs it and advances the player", () => {
