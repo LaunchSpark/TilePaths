@@ -8,7 +8,8 @@ function position(clientX: number, clientY: number): void {
 
 export function startDragPreview(
   source: HTMLCanvasElement,
-  event: DragEvent,
+  clientX: number,
+  clientY: number,
   orientation: number,
 ): void {
   endDragPreview();
@@ -19,15 +20,8 @@ export function startDragPreview(
   preview.className = "tile-drag-preview";
   preview.getContext("2d")?.drawImage(source, 0, 0);
   document.body.append(preview);
-  position(event.clientX, event.clientY);
+  position(clientX, clientY);
   rotateDragPreview(orientation);
-
-  // The browser's native drag image is a frozen snapshot. Hide it so our
-  // live preview can rotate while the pointer is held down.
-  const transparent = document.createElement("canvas");
-  transparent.width = 1;
-  transparent.height = 1;
-  event.dataTransfer?.setDragImage(transparent, 0, 0);
 }
 
 export function moveDragPreview(clientX: number, clientY: number): void {

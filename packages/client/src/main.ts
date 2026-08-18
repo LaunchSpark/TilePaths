@@ -5,10 +5,10 @@ import { LocalSession } from "./session.js";
 import { Controller } from "./state.js";
 import { renderLog } from "./ui/log.js";
 import { renderPlayers } from "./ui/rail.js";
-import { renderTray, TILE_DRAG_TYPE } from "./ui/tray.js";
+import { renderTray } from "./ui/tray.js";
 import {
+  endDragPreview,
   isDragPreviewActive,
-  moveDragPreview,
   rotateDragPreview,
 } from "./ui/drag-preview.js";
 
@@ -31,9 +31,28 @@ let hoverCell: [number, number] | null = null;
 function render(): void {
   const view = controller.view();
   drawBoard(ctx, layout, controller, hoverCell);
-  // Removing the native drag source mid-drag cancels dragging in some
-  // browsers, so leave the tray DOM in place until dragend.
-  if (!isDragPreviewActive()) renderTray(trayRoot, controller);
+  // Keep the pointer-capturing source in the DOM until the drag finishes.
+  if (!isDragPreviewActive()) renderTray(trayRoot, controller, {
+    move: (clientX, clientY) => {
+      updateHover(clientX, clientY);
+      drawBoard(ctx, layout, controller, hoverCell);
+    },
+    drop: (pileIndex, clientX, clientY) => {
+      const rect = canvas.getBoundingClientRect();
+      const onBoard = clientX >= rect.left && clientX <= rect.right
+        && clientY >= rect.top && clientY <= rect.bottom;
+      hoverCell = null;
+      if (!onBoard) {
+        controller.handleAndRender({ kind: "escape" });
+        return;
+      }
+      if (controller.selectedPile !== pileIndex) {
+        controller.handle({ kind: "selectPile", pileIndex });
+      }
+      const [x, y] = boardPoint(clientX, clientY);
+      controller.handleAndRender({ kind: "click", hit: hitTest(x, y, layout) });
+    },
+  });
   rotateDragPreview(controller.ghostOrientation);
   renderPlayers(playersRoot, controller);
   renderLog(logRoot, controller);
@@ -102,39 +121,6 @@ canvas.addEventListener("click", (event) => {
   });
 });
 
-canvas.addEventListener("dragover", (event) => {
-  if (!event.dataTransfer?.types.includes(TILE_DRAG_TYPE)) return;
-  event.preventDefault();
-  event.dataTransfer.dropEffect = "move";
-  moveDragPreview(event.clientX, event.clientY);
-  updateHover(event.clientX, event.clientY);
-  drawBoard(ctx, layout, controller, hoverCell);
-});
-
-canvas.addEventListener("dragleave", (event) => {
-  if (event.relatedTarget !== null && canvas.contains(event.relatedTarget as Node)) return;
-  hoverCell = null;
-  drawBoard(ctx, layout, controller, hoverCell);
-});
-
-canvas.addEventListener("drop", (event) => {
-  if (event.dataTransfer === null) return;
-  const rawPileIndex = event.dataTransfer.getData(TILE_DRAG_TYPE);
-  if (!/^\d+$/.test(rawPileIndex)) return;
-  const pileIndex = Number(rawPileIndex);
-  event.preventDefault();
-  if (controller.selectedPile !== pileIndex) {
-    controller.handle({ kind: "selectPile", pileIndex });
-  }
-  const [x, y] = boardPoint(event.clientX, event.clientY);
-  hoverCell = null;
-  controller.handleAndRender({ kind: "click", hit: hitTest(x, y, layout) });
-});
-
-window.addEventListener("dragover", (event) => {
-  if (isDragPreviewActive()) moveDragPreview(event.clientX, event.clientY);
-});
-
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
   controller.handleAndRender({ kind: "rotate", direction: event.deltaY < 0 ? -1 : 1 });
@@ -146,7 +132,8 @@ rotateRightButton.addEventListener("click", () =>
   controller.handleAndRender({ kind: "rotate", direction: 1 }));
 commitButton.addEventListener("click", () => controller.handleAndRender({ kind: "commit" }));
 
-window.addEventListener("contextmenu", (event) => {
+window.addEventListener("mousedown", (event) => {
+  if (event.button !== 2) return;
   const target = event.target;
   if (!(target instanceof Element)) return;
   const pileCanvas = target.closest<HTMLCanvasElement>(".pile canvas");
@@ -161,6 +148,16 @@ window.addEventListener("contextmenu", (event) => {
   controller.handleAndRender({ kind: "rotate" });
 });
 
+window.addEventListener("contextmenu", (event) => {
+  const target = event.target;
+  if (!(target instanceof Element)) return;
+  if (controller.state === "tileSelected" && (
+    target.closest(".pile canvas") !== null
+    || canvas.contains(target)
+    || isDragPreviewActive()
+  )) event.preventDefault();
+});
+
 window.addEventListener("keydown", (event) => {
   const key = event.key.toLowerCase();
   if (key >= "1" && key <= String(config.N_PILES)) {
@@ -169,6 +166,7 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     controller.handleAndRender({ kind: "rotate" });
   } else if (key === "escape") {
+    endDragPreview();
     controller.handleAndRender({ kind: "escape" });
   } else if (key === "backspace") {
     event.preventDefault();

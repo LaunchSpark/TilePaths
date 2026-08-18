@@ -2,12 +2,15 @@ import { resolve } from "@passtally/rules";
 import type { TypeId } from "@passtally/rules";
 import { drawCellArt } from "../render/tiles.js";
 import type { Controller } from "../state.js";
-import { endDragPreview, startDragPreview } from "./drag-preview.js";
+import { endDragPreview, moveDragPreview, startDragPreview } from "./drag-preview.js";
 
 const PILE_WIDTH = 64;
 const PILE_HEIGHT = 128;
 
-export const TILE_DRAG_TYPE = "application/x-passtally-pile";
+export type TrayDragHandlers = {
+  move(clientX: number, clientY: number): void;
+  drop(pileIndex: number, clientX: number, clientY: number): void;
+};
 
 function drawPileTile(canvas: HTMLCanvasElement, typeId: TypeId): void {
   const ctx = canvas.getContext("2d");
@@ -23,7 +26,11 @@ function drawPileTile(canvas: HTMLCanvasElement, typeId: TypeId): void {
   ctx.strokeRect(1, 1, PILE_WIDTH - 2, PILE_HEIGHT - 2);
 }
 
-export function renderTray(root: HTMLElement, controller: Controller): void {
+export function renderTray(
+  root: HTMLElement,
+  controller: Controller,
+  drag: TrayDragHandlers,
+): void {
   const view = controller.view();
   root.replaceChildren();
 
@@ -38,35 +45,57 @@ export function renderTray(root: HTMLElement, controller: Controller): void {
     canvas.width = PILE_WIDTH;
     canvas.height = PILE_HEIGHT;
     canvas.title = "Drag to place. Right-click or press R to rotate 90 degrees.";
-    canvas.draggable = view.phase === "play"
+    const canDrag = view.phase === "play"
       && view.actionsLeft > 0
       && pile.faceUp !== null
       && !controller.isSpent(index);
+    canvas.classList.toggle("can-drag", canDrag);
     if (pile.faceUp !== null && !controller.isSpent(index)) drawPileTile(canvas, pile.faceUp);
-    canvas.addEventListener("click", () =>
-      controller.handleAndRender({ kind: "selectPile", pileIndex: index }));
-    canvas.addEventListener("dragstart", (event) => {
+    let pointerId: number | null = null;
+    let startX = 0;
+    let startY = 0;
+    let moved = false;
+
+    canvas.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || !canDrag) return;
+      event.preventDefault();
       controller.handle({ kind: "selectPile", pileIndex: index });
-      if (controller.lastRejection !== null || event.dataTransfer === null) {
-        event.preventDefault();
+      if (controller.lastRejection !== null) {
         controller.onChange?.();
         return;
       }
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData(TILE_DRAG_TYPE, String(index));
+      pointerId = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      moved = false;
+      canvas.setPointerCapture(pointerId);
       wrap.classList.add("selected", "dragging");
-      startDragPreview(canvas, event, controller.ghostOrientation);
+      startDragPreview(canvas, event.clientX, event.clientY, controller.ghostOrientation);
+      controller.onChange?.();
     });
-    canvas.addEventListener("dragend", (event) => {
+
+    canvas.addEventListener("pointermove", (event) => {
+      if (event.pointerId !== pointerId) return;
+      if (Math.hypot(event.clientX - startX, event.clientY - startY) >= 4) moved = true;
+      moveDragPreview(event.clientX, event.clientY);
+      drag.move(event.clientX, event.clientY);
+    });
+
+    canvas.addEventListener("pointerup", (event) => {
+      if (event.pointerId !== pointerId || event.button !== 0) return;
+      canvas.releasePointerCapture(pointerId);
+      pointerId = null;
       endDragPreview();
-      if (
-        event.dataTransfer?.dropEffect === "none"
-        && controller.state === "tileSelected"
-        && controller.selectedPile === index
-        && controller.lastRejection === null
-      ) {
-        controller.handle({ kind: "escape" });
-      }
+      wrap.classList.remove("dragging");
+      if (moved) drag.drop(index, event.clientX, event.clientY);
+      else controller.onChange?.();
+    });
+
+    canvas.addEventListener("pointercancel", (event) => {
+      if (event.pointerId !== pointerId) return;
+      pointerId = null;
+      endDragPreview();
+      controller.handle({ kind: "escape" });
       controller.onChange?.();
     });
 
