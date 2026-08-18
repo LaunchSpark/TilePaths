@@ -51,6 +51,14 @@ describe("construction", () => {
   it("rejects bad player counts", () => {
     for (const n of [0, 1, 4]) expect(() => Game.newGame(n)).toThrow();
   });
+
+  it("rejects a non-integer player count", () => {
+    expect(() => Game.newGame(2.5)).toThrow();
+  });
+
+  it("rejects NaN as a player count", () => {
+    expect(() => Game.newGame(NaN)).toThrow();
+  });
 });
 
 describe("setup", () => {
@@ -149,6 +157,10 @@ describe("turns", () => {
     expect(() => setup().apply(marker(0, 3))).toThrow();
   });
 
+  it("rejects a non-integer marker index", () => {
+    expect(() => setup().apply(marker(1.5, 1))).toThrow();
+  });
+
   it("moves a marker and preserves its id", () => {
     const g = setup(2, 1, 6);
     const start = g.players[0]!.markerSlots[0]!;
@@ -216,8 +228,13 @@ describe("scoring and end", () => {
     expect(g.players[1]!.score).toBe(2);
   });
 
+  /** Unequal scores while `over` is still false: the tie branch cannot be
+   *  what produces `null` here, so only the `!this.over` guard can. A fresh
+   *  `setup()` has both players at score 0, which would tie regardless of
+   *  the guard -- that version of this test passed without exercising it. */
   it("has no winner before the end", () => {
     const g = setup();
+    g.players[0]!.score = 5;
     expect(g.isOver()).toBe(false);
     expect(g.winner()).toBeNull();
   });
@@ -308,5 +325,83 @@ describe("scoring and end", () => {
     g.apply(marker(0, 1)); g.apply(marker(0, -1));
     g.apply(marker(0, 1)); g.apply(marker(0, -1));
     expect(() => g.apply(marker(0, 1))).toThrow();
+  });
+});
+
+describe("clone", () => {
+  /** Two placements in, so board, piles and turn state have all moved past
+   *  their initial values. */
+  function midGame(): Game {
+    const g = setup();
+    g.apply(place(0, [2, 2], [3, 2], 0));
+    g.apply(place(0, [2, 3], [3, 3], 0));
+    return g;
+  }
+
+  it("gives every mutable component its own identity", () => {
+    const g = midGame();
+    const c = g.clone();
+
+    expect(c.board.ring).not.toBe(g.board.ring);
+    g.board.ring.forEach((_, i) => {
+      expect(c.board.ring[i]).not.toBe(g.board.ring[i]);
+    });
+
+    expect(c.players).not.toBe(g.players);
+    g.players.forEach((_, i) => {
+      expect(c.players[i]).not.toBe(g.players[i]);
+      expect(c.players[i]!.markerSlots).not.toBe(g.players[i]!.markerSlots);
+    });
+
+    g.piles.forEach((_, i) => {
+      expect(c.piles[i]).not.toBe(g.piles[i]);
+      expect(c.piles[i]!.ordered).not.toBe(g.piles[i]!.ordered);
+    });
+
+    for (let row = 0; row < g.board.n; row++) {
+      for (let col = 0; col < g.board.n; col++) {
+        expect(c.board.cells[row]![col]).not.toBe(g.board.cells[row]![col]);
+        expect(c.board.cells[row]![col]!.conns).not.toBe(g.board.cells[row]![col]!.conns);
+      }
+    }
+
+    // `Ring` is immutable, so clone() deliberately shares it instead of copying.
+    expect(c.board.nav).toBe(g.board.nav);
+  });
+
+  it("leaves the origin untouched when a marker move is applied to the clone", () => {
+    const g = midGame();
+    const c = g.clone();
+
+    const originKey = g.key();
+    const ringSnapshot = g.board.ring.map((s) => s.occupant);
+    const markerSnapshot = g.players.map((p) => [...p.markerSlots]);
+
+    c.apply(marker(0, 1));
+
+    expect(g.key()).toBe(originKey);
+    expect(g.board.ring.map((s) => s.occupant)).toEqual(ringSnapshot);
+    expect(g.players.map((p) => [...p.markerSlots])).toEqual(markerSnapshot);
+  });
+
+  it("round-trips turn state and per-player scores", () => {
+    const g = midGame();
+    g.currentPlayer = 1;
+    g.actionsLeft = 1;
+    g.firstPlayer = 1;
+    g.finalRound = true;
+    g.over = true;
+    g.players[0]!.score = 7;
+    g.players[1]!.score = 3;
+
+    const c = g.clone();
+
+    expect(c.currentPlayer).toBe(g.currentPlayer);
+    expect(c.actionsLeft).toBe(g.actionsLeft);
+    expect(c.firstPlayer).toBe(g.firstPlayer);
+    expect(c.finalRound).toBe(g.finalRound);
+    expect(c.over).toBe(g.over);
+    expect(c.board.nextPlacementId).toBe(g.board.nextPlacementId);
+    c.players.forEach((p, i) => expect(p.score).toBe(g.players[i]!.score));
   });
 });

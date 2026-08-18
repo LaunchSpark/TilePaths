@@ -28,7 +28,7 @@ export class Game {
   }
 
   static newGame(nPlayers: number, seed = 0, boardSize: number = config.N): Game {
-    if (nPlayers < 2 || nPlayers > 3) {
+    if (!Number.isInteger(nPlayers) || nPlayers < 2 || nPlayers > 3) {
       throw new Error(`nPlayers must be 2 or 3, got ${nPlayers}`);
     }
     const deck: TypeId[] = [];
@@ -120,7 +120,8 @@ export class Game {
 
   private applyMarker(move: Extract<Move, { kind: "marker" }>): void {
     const entry = this.players[this.currentPlayer]!;
-    if (move.markerIndex < 0 || move.markerIndex >= entry.markerSlots.length) {
+    if (!Number.isInteger(move.markerIndex) ||
+        move.markerIndex < 0 || move.markerIndex >= entry.markerSlots.length) {
       throw new Error(`no marker with index ${move.markerIndex}`);
     }
     if (!(config.MARKER_DISTANCES as readonly number[]).includes(move.distance)) {

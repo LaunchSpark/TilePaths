@@ -72,3 +72,54 @@ describe("key", () => {
     expect(forward.key()).toBe(backward.key());
   });
 });
+
+describe("key encodes every component", () => {
+  /** Two placements in, so the board isn't the trivially-empty starting
+   *  position while we probe what the key does and doesn't capture. */
+  function midGame(): Game {
+    const g = setup();
+    g.apply(place(0, [2, 2], [3, 2], 0));
+    g.apply(place(0, [2, 3], [3, 3], 0));
+    return g;
+  }
+
+  const cases: Array<[string, (g: Game) => void]> = [
+    ["a marker moved to a different slot", (g) => {
+      const entry = g.players[0]!;
+      const current = entry.markerSlots[0]!;
+      const empty = g.board.ring.findIndex((s, i) => i !== current && s.occupant === null);
+      entry.markerSlots[0] = empty;
+    }],
+    ["a player's score bumped", (g) => {
+      g.players[0]!.score += 1;
+    }],
+    ["currentPlayer advanced", (g) => {
+      g.currentPlayer = (g.currentPlayer + 1) % g.players.length;
+    }],
+    ["actionsLeft decremented", (g) => {
+      g.actionsLeft -= 1;
+    }],
+    ["finalRound set true", (g) => {
+      g.finalRound = true;
+    }],
+    ["over set true", (g) => {
+      g.over = true;
+    }],
+    ["a pile's faceUp changed", (g) => {
+      const pile = g.piles[0]!;
+      pile.faceUp = pile.faceUp === 1 ? 2 : 1;
+    }],
+    ["a cell's height changed", (g) => {
+      const cell = g.board.cells[0]![0]!;
+      cell.height += 1;
+    }],
+  ];
+
+  it.each(cases)("distinguishes: %s", (_label, mutate) => {
+    const g = midGame();
+    const baseline = g.key();
+    const clone = g.clone();
+    mutate(clone);
+    expect(clone.key()).not.toBe(baseline);
+  });
+});
