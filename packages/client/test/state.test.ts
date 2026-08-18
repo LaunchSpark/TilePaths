@@ -65,6 +65,16 @@ describe("placing a tile", () => {
     }
   });
 
+  it("rotates counterclockwise and preserves rotation when reselecting the same pile", () => {
+    const current = controller();
+    driveSetup(current);
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    current.handle({ kind: "rotate", direction: -1 });
+    expect(current.ghostOrientation).toBe(3);
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    expect(current.ghostOrientation).toBe(3);
+  });
+
   it("places on a legal anchor and returns to idle", () => {
     const current = controller();
     driveSetup(current);

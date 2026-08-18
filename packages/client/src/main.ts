@@ -13,6 +13,9 @@ const trayRoot = document.querySelector<HTMLElement>("#piles")!;
 const playersRoot = document.querySelector<HTMLElement>("#players")!;
 const logRoot = document.querySelector<HTMLElement>("#log")!;
 const actionsLabel = document.querySelector<HTMLElement>("#actions")!;
+const rotateLeftButton = document.querySelector<HTMLButtonElement>("#rotate-left")!;
+const rotateRightButton = document.querySelector<HTMLButtonElement>("#rotate-right")!;
+const rotationLabel = document.querySelector<HTMLElement>("#rotation")!;
 const commitButton = document.querySelector<HTMLButtonElement>("#commit")!;
 const status = document.querySelector<HTMLElement>("#status")!;
 
@@ -30,7 +33,21 @@ function render(): void {
   actionsLabel.textContent = view.phase === "setup"
     ? `setup: player ${(view.setupNext ?? 0) + 1} places a marker`
     : `actions left: ${view.actionsLeft}`;
+  const canRotate = controller.state === "tileSelected";
+  rotateLeftButton.disabled = !canRotate;
+  rotateRightButton.disabled = !canRotate;
+  rotationLabel.textContent = `${controller.ghostOrientation * 90}°`;
   commitButton.disabled = view.phase !== "play" || view.actionsLeft !== 0;
+  commitButton.textContent = view.phase !== "play"
+    ? "commit"
+    : view.actionsLeft === 0
+      ? "commit turn"
+      : view.actionsLeft === config.ACTIONS_PER_TURN
+        ? `take ${config.ACTIONS_PER_TURN} actions`
+        : `${view.actionsLeft} more action`;
+  commitButton.title = view.phase === "play" && view.actionsLeft > 0
+    ? `Passtally turns require ${config.ACTIONS_PER_TURN} actions.`
+    : "Commit the completed turn";
 
   if (controller.lastRejection !== null) {
     status.textContent = controller.lastRejection;
@@ -107,9 +124,13 @@ canvas.addEventListener("drop", (event) => {
 
 canvas.addEventListener("wheel", (event) => {
   event.preventDefault();
-  controller.handleAndRender({ kind: "rotate" });
+  controller.handleAndRender({ kind: "rotate", direction: event.deltaY < 0 ? -1 : 1 });
 }, { passive: false });
 
+rotateLeftButton.addEventListener("click", () =>
+  controller.handleAndRender({ kind: "rotate", direction: -1 }));
+rotateRightButton.addEventListener("click", () =>
+  controller.handleAndRender({ kind: "rotate", direction: 1 }));
 commitButton.addEventListener("click", () => controller.handleAndRender({ kind: "commit" }));
 
 window.addEventListener("keydown", (event) => {

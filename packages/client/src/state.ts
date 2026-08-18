@@ -13,7 +13,7 @@ export type UiInput =
   | { kind: "click"; hit: Hit }
   | { kind: "selectPile"; pileIndex: number }
   | { kind: "selectMarker"; markerIndex: number }
-  | { kind: "rotate" }
+  | { kind: "rotate"; direction?: -1 | 1 }
   | { kind: "undo" }
   | { kind: "escape" }
   | { kind: "commit" };
@@ -89,7 +89,7 @@ export class Controller {
     switch (input.kind) {
       case "selectPile": return this.onSelectPile(input.pileIndex);
       case "selectMarker": return this.onSelectMarker(input.markerIndex);
-      case "rotate": return this.onRotate();
+      case "rotate": return this.onRotate(input.direction);
       case "undo": return this.onUndo();
       case "commit": return this.onCommit();
       case "click": return this.onClick(input.hit);
@@ -104,6 +104,7 @@ export class Controller {
     if (this.view().piles[pileIndex]?.faceUp == null) {
       throw new Error(`pile ${pileIndex} is empty`);
     }
+    if (this.state === "tileSelected" && this.selectedPile === pileIndex) return;
     this.clearSelection();
     this.selectedPile = pileIndex;
     this.state = "tileSelected";
@@ -137,9 +138,9 @@ export class Controller {
     return destinations;
   }
 
-  private onRotate(): void {
+  private onRotate(direction: -1 | 1 = 1): void {
     if (this.state !== "tileSelected") return;
-    this.ghostOrientation = (this.ghostOrientation + 1) % 4;
+    this.ghostOrientation = (this.ghostOrientation + direction + 4) % 4;
   }
 
   private onUndo(): void {

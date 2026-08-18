@@ -31,6 +31,7 @@ export type GameView = {
   actionsLeft: number;
   phase: "setup" | "play" | "over";
   setupNext: number | null;
+  setupLegalSlots: number[];
   winner: number | null;
 };
 

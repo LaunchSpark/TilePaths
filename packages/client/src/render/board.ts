@@ -13,6 +13,21 @@ function strokeRect(ctx: CanvasRenderingContext2D, rect: Rect, colour: string, w
   ctx.strokeRect(rect.x + width / 2, rect.y + width / 2, rect.w - width, rect.h - width);
 }
 
+function drawCellGuide(ctx: CanvasRenderingContext2D, rect: Rect): void {
+  const centreX = rect.x + rect.w / 2;
+  const centreY = rect.y + rect.h / 2;
+  const arm = Math.min(rect.w, rect.h) * 0.18;
+  ctx.strokeStyle = "#c8c1b4";
+  ctx.lineWidth = 2;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(centreX - arm, centreY);
+  ctx.lineTo(centreX + arm, centreY);
+  ctx.moveTo(centreX, centreY - arm);
+  ctx.lineTo(centreX, centreY + arm);
+  ctx.stroke();
+}
+
 export function drawBoard(
   ctx: CanvasRenderingContext2D,
   layout: Layout,
@@ -32,12 +47,26 @@ export function drawBoard(
     layout.size - 2 * size,
   );
 
+  if (view.phase === "setup") {
+    const colour = PLAYER_COLOURS[(view.setupNext ?? 0) % PLAYER_COLOURS.length]!;
+    for (const slot of view.setupLegalSlots) {
+      const rect = slotRect(layout, slot);
+      ctx.fillStyle = "#d1c7b6";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+      strokeRect(ctx, rect, colour, 2);
+    }
+  }
+
   for (let row = 0; row < view.n; row++) {
     for (let col = 0; col < view.n; col++) {
       const rect = cellRect(layout, row, col);
       const cell = view.cells[row]![col]!;
-      if (cell.conns === null) strokeRect(ctx, rect, "#ddd7cb", 1);
-      else drawCellArt(ctx, rect, cell.conns, cell.height);
+      if (cell.conns === null) {
+        strokeRect(ctx, rect, "#ddd7cb", 1);
+        drawCellGuide(ctx, rect);
+      } else {
+        drawCellArt(ctx, rect, cell.conns, cell.height);
+      }
     }
   }
 

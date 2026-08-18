@@ -19,6 +19,23 @@ export function nextSetupPlayer(game: Game): number | null {
   return setupOrder(game.players.length)[placed] ?? null;
 }
 
+/** Ask the engine which setup slots are legal by trying each one on a clone.
+ * This keeps the per-edge and occupancy rules out of the client view layer. */
+function legalSetupSlots(game: Game, player: number | null): number[] {
+  if (player === null) return [];
+  const legal: number[] = [];
+  for (let slot = 0; slot < game.board.ring.length; slot++) {
+    const trial = game.clone();
+    try {
+      trial.setupPlaceMarker(player, slot);
+      legal.push(slot);
+    } catch {
+      // The rules engine is the authority; rejected slots are simply omitted.
+    }
+  }
+  return legal;
+}
+
 function cellViews(board: Board): CellView[][] {
   const rows: CellView[][] = [];
   for (let row = 0; row < board.n; row++) {
@@ -61,6 +78,7 @@ export function buildView(game: Game, overlay?: Overlay): GameView {
     actionsLeft: overlay?.actionsLeft ?? game.actionsLeft,
     phase: game.isOver() ? "over" : setupNext === null ? "play" : "setup",
     setupNext,
+    setupLegalSlots: legalSetupSlots(game, setupNext),
     winner: game.winner(),
   };
 }

@@ -28,6 +28,17 @@ describe("buildView", () => {
     expect(v.setupNext).not.toBeNull();
   });
 
+  it("reports setup slots accepted by the rules engine", () => {
+    const game = Game.newGame(2, 1, 6);
+    expect(buildView(game).setupLegalSlots).toHaveLength(24);
+
+    game.setupPlaceMarker(0, 0);
+    game.setupPlaceMarker(1, 1);
+    const view = buildView(game);
+    expect(view.setupNext).toBe(1);
+    expect(view.setupLegalSlots).toEqual([...Array(18).keys()].map((index) => index + 6));
+  });
+
   it("mirrors cells with height, conns and partner offset", () => {
     const g = setup();
     g.apply({ kind: "place", pileIndex: 0, cellA: [2, 2], cellB: [3, 2], orientation: 0 });
