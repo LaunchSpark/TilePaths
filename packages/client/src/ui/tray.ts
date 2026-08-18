@@ -2,6 +2,7 @@ import { resolve } from "@passtally/rules";
 import type { TypeId } from "@passtally/rules";
 import { drawCellArt } from "../render/tiles.js";
 import type { Controller } from "../state.js";
+import { endDragPreview, startDragPreview } from "./drag-preview.js";
 
 const PILE_WIDTH = 64;
 const PILE_HEIGHT = 128;
@@ -36,6 +37,7 @@ export function renderTray(root: HTMLElement, controller: Controller): void {
     const canvas = document.createElement("canvas");
     canvas.width = PILE_WIDTH;
     canvas.height = PILE_HEIGHT;
+    canvas.title = "Drag to place. Right-click or press R to rotate 90 degrees.";
     canvas.draggable = view.phase === "play"
       && view.actionsLeft > 0
       && pile.faceUp !== null
@@ -53,16 +55,19 @@ export function renderTray(root: HTMLElement, controller: Controller): void {
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData(TILE_DRAG_TYPE, String(index));
       wrap.classList.add("selected", "dragging");
+      startDragPreview(canvas, event, controller.ghostOrientation);
     });
     canvas.addEventListener("dragend", (event) => {
+      endDragPreview();
       if (
         event.dataTransfer?.dropEffect === "none"
         && controller.state === "tileSelected"
         && controller.selectedPile === index
         && controller.lastRejection === null
       ) {
-        controller.handleAndRender({ kind: "escape" });
+        controller.handle({ kind: "escape" });
       }
+      controller.onChange?.();
     });
 
     const count = document.createElement("div");
