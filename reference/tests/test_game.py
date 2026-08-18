@@ -177,14 +177,14 @@ def test_score_is_awarded_once_at_end_of_turn():
     game = Game.new(2, seed=1, board_size=3)
     game.setup_place_marker(0, slot_index_of(3, 0, 0, Side.W))
     game.setup_place_marker(0, slot_index_of(3, 0, 2, Side.E))
-    game.setup_place_marker(1, slot_index_of(3, 2, 0, Side.W))
-    game.setup_place_marker(1, slot_index_of(3, 2, 2, Side.E))
-    # Complete setup (config.MARKERS_PER_PLAYER == 4) with markers that trace
-    # into dead ends, so they don't add spurious lines to either score.
+    # Complete setup with markers on different columns so the printed starting
+    # crosses do not create a second line for player 0.
     game.setup_place_marker(0, slot_index_of(3, 0, 1, Side.N))
-    game.setup_place_marker(0, slot_index_of(3, 2, 1, Side.S))
+    game.setup_place_marker(0, slot_index_of(3, 2, 2, Side.S))
     game.setup_place_marker(1, slot_index_of(3, 0, 0, Side.N))
-    game.setup_place_marker(1, slot_index_of(3, 2, 0, Side.S))
+    game.setup_place_marker(1, slot_index_of(3, 1, 2, Side.E))
+    game.setup_place_marker(1, slot_index_of(3, 2, 1, Side.S))
+    game.setup_place_marker(1, slot_index_of(3, 1, 0, Side.W))
 
     # Force a known board rather than relying on the shuffle.
     for col in range(3):
@@ -209,12 +209,12 @@ def test_only_the_current_player_is_scored_at_end_of_turn():
     game.setup_place_marker(1, slot_index_of(3, 0, 0, Side.W))
     game.setup_place_marker(1, slot_index_of(3, 0, 2, Side.E))
     game.setup_place_marker(1, slot_index_of(3, 0, 1, Side.N))
-    game.setup_place_marker(1, slot_index_of(3, 2, 1, Side.S))
-    # Player 0's markers all trace into the empty row and dead-end.
-    game.setup_place_marker(0, slot_index_of(3, 2, 0, Side.W))
-    game.setup_place_marker(0, slot_index_of(3, 2, 2, Side.E))
+    game.setup_place_marker(1, slot_index_of(3, 2, 2, Side.S))
+    # Player 0 owns the other horizontal line, across row 1.
     game.setup_place_marker(0, slot_index_of(3, 0, 0, Side.N))
-    game.setup_place_marker(0, slot_index_of(3, 2, 0, Side.S))
+    game.setup_place_marker(0, slot_index_of(3, 1, 2, Side.E))
+    game.setup_place_marker(0, slot_index_of(3, 2, 1, Side.S))
+    game.setup_place_marker(0, slot_index_of(3, 1, 0, Side.W))
 
     for col in range(3):
         place_tile(game.board, (0, col), (1, col), 2, 0)

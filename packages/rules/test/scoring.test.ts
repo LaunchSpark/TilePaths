@@ -26,6 +26,15 @@ function twoParallelLines(): Board {
 }
 
 describe("scoreLines", () => {
+  it("scores a placed tile connected by the board's starting paths", () => {
+    const b = emptyBoard(4);
+    placeTile(b, [1, 1], [1, 2], 2, 3);
+    const slots = [slotIndexOf(4, 1, 0, Side.W), slotIndexOf(4, 1, 3, Side.E)];
+
+    expect([...scoreLines(b, slots).values()]).toEqual([1]);
+    expect(scoreFor(b, slots)).toBe(1);
+  });
+
   it("scores one connected pair as a single line", () => {
     const b = twoParallelLines();
     const slots = [slotIndexOf(4, 0, 0, Side.W), slotIndexOf(4, 0, 3, Side.E)];

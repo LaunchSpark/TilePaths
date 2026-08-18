@@ -18,22 +18,22 @@ def test_seam_crossing_counts_once():
     board = Board.empty(3)
     place_tile(board, (0, 0), (1, 0), 2, 0)
     end, passes = trace(board, slot_index_of(3, 0, 0, Side.N))
-    assert end is Result.DEAD  # runs off into the empty cell below
+    assert end == slot_index_of(3, 2, 0, Side.S)
     assert passes == 1
 
 
-def test_line_into_an_empty_cell_is_dead():
+def test_line_continues_through_a_starting_cross():
     board = Board.empty(3)
     place_tile(board, (0, 0), (0, 1), 2, 3)
     end, passes = trace(board, slot_index_of(3, 0, 0, Side.W))
-    assert end is Result.DEAD
+    assert end == slot_index_of(3, 0, 2, Side.E)
     assert passes == 1
 
 
-def test_trace_from_an_empty_cell_is_dead_with_no_passes():
+def test_trace_crosses_an_empty_board_with_no_passes():
     board = Board.empty(3)
     end, passes = trace(board, 0)
-    assert end is Result.DEAD
+    assert end == slot_index_of(3, 2, 0, Side.S)
     assert passes == 0
 
 
@@ -46,7 +46,7 @@ def test_crossing_the_same_tile_twice_counts_twice():
     place_tile(board, (1, 1), (1, 0), 1, 1)  # the tile crossed twice
     place_tile(board, (0, 1), (0, 0), 1, 1)  # the tile that turns it around
     end, passes = trace(board, slot_index_of(3, 1, 0, Side.W))
-    assert end is Result.DEAD
+    assert isinstance(end, int)
     assert passes == 3  # 2 if the second crossing were wrongly suppressed
 
 

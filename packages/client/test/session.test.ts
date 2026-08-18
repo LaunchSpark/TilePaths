@@ -1,4 +1,4 @@
-import { Game, config } from "@passtally/rules";
+import { Game, config, placeTile } from "@passtally/rules";
 import type { Move } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
 import { LocalSession } from "../src/session.js";
@@ -96,6 +96,20 @@ describe("commit", () => {
     expect(result.lines.length).toBe(1);
     expect([...result.lines[0]!.slots].sort((a, b) => a - b)).toEqual([3, 11]);
     expect(result.lines[0]!.passes).toBe(3);
+  });
+
+  it("updates the visible score for a route using starting cross paths", () => {
+    const game = Game.newGame(2, 1, 4);
+    for (const slot of [14, 5, 0, 8]) game.setupPlaceMarker(0, slot);
+    for (const slot of [1, 4, 9, 15]) game.setupPlaceMarker(1, slot);
+    placeTile(game.board, [1, 1], [1, 2], 2, 3);
+    const session = new LocalSession(game);
+
+    const result = session.commit([marker(0, 1), marker(0, -1)]);
+
+    expect(result.totalPasses).toBe(1);
+    expect(result.vpAwarded).toBe(1);
+    expect(session.getView().players[0]!.score).toBe(1);
   });
 
   it("reports no lines when nothing scores", () => {

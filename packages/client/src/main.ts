@@ -158,7 +158,7 @@ window.addEventListener("mousedown", (event) => {
   const pileCanvas = target.closest<HTMLCanvasElement>(".pile canvas");
   if (pileCanvas !== null) {
     const pile = pileCanvas.closest<HTMLElement>(".pile");
-    const pileIndex = pile === null ? -1 : [...trayRoot.children].indexOf(pile);
+    const pileIndex = pile === null ? -1 : Array.from(trayRoot.children).indexOf(pile);
     if (pileIndex >= 0) controller.handle({ kind: "selectPile", pileIndex });
   }
   if (controller.state !== "tileSelected") return;

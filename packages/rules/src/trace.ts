@@ -1,11 +1,12 @@
 /** Line tracing and scoring.
  *
- *  Because every cell pairs its four faces bijectively, `follow` is an
- *  involution and the whole step relation is reversible. A trace starting from
- *  a border slot therefore cannot loop: revisiting a state would require two
- *  predecessors, and the reverse trajectory would have to exit off-board. The
- *  LOOP guard is kept regardless -- it is three lines, and it is the difference
- *  between a bug and a hang if the tile data is ever revised. */
+ *  Printed starting crosses carry lines straight through uncovered cells for
+ *  zero passes. Placed cells pair their four faces bijectively, so the whole
+ *  step relation remains reversible. A trace starting from a border slot
+ *  therefore cannot loop: revisiting a state would require two predecessors,
+ *  and the reverse trajectory would have to exit off-board. The LOOP guard is
+ *  kept regardless -- it is the difference between a bug and a hang if the
+ *  tile data is ever revised. */
 
 import { follow, inBounds, slotIndexOf } from "./board.js";
 import type { Board } from "./board.js";
@@ -30,16 +31,20 @@ export function traceFrom(
     seen.add(key);
 
     const cell = board.cells[row]![col]!;
-    if (cell.placementId === null) return [Result.DEAD, passes];
-
-    const exitFace = follow(cell, entry);
+    // The board's printed + is an X path: it connects N-S and E-W but is not
+    // a tile, so crossing it contributes no passes.
+    const exitFace = cell.placementId === null ? opposite(entry) : follow(cell, entry);
     if (exitFace === null) return [Result.DEAD, passes];
 
     // Compare against the PREVIOUS STEP ONLY, never a visited-set. A line may
     // cross the same tile more than once and each crossing scores; a set would
     // silently eat the second pass. A seam crossing leaves placementId
     // unchanged and correctly adds nothing.
-    if (cell.placementId !== lastId) {
+    if (cell.placementId === null) {
+      // An uncovered cell separates tile visits. If a later bend returns to
+      // the same physical tile, that is a new pass through it.
+      lastId = null;
+    } else if (cell.placementId !== lastId) {
       passes += cell.height;
       lastId = cell.placementId;
     }

@@ -87,9 +87,9 @@ share a shape has only **2** distinct orientations, not 4:
    cut off an existing line" rule guards against straddling in a game where tiles slide; that
    case is already covered by the support checks.
 
-2. **A line can never dead-end mid-tile.** `trace` returns `DEAD` only on reaching an empty
-   cell. The handoff spec's open question about lines dead-ending into a raised tile's blank
-   face is retired — no blank faces exist.
+2. **Uncovered cells contain printed cross paths.** They route N–S and E–W for zero passes;
+   only placed tiles contribute passes. A line can never dead-end on a valid board. `DEAD`
+   remains as a defensive result for malformed placed-cell connection data.
 
 ### Representation choice
 
@@ -324,10 +324,9 @@ def trace(state, start_slot) -> tuple[Result | int, int]:
         seen.add(key)
 
         cell = state.board.cells[r][c]
-        if cell.placement_id is None:
-            return (Result.DEAD, passes)
-
-        exit_face = cell.follow(entry)          # scan conns for a tuple containing `entry`
+        # The board's printed + carries the line straight through for 0 passes.
+        exit_face = (opposite(entry) if cell.placement_id is None
+                     else cell.follow(entry))   # scan placed conns for `entry`
         if exit_face is None:
             return (Result.DEAD, passes)
 
@@ -335,7 +334,9 @@ def trace(state, start_slot) -> tuple[Result | int, int]:
         # A line may cross the same tile more than once and each crossing scores.
         # A set would silently eat the second pass. A seam crossing leaves
         # placement_id unchanged and correctly adds nothing.
-        if cell.placement_id != last_id:
+        if cell.placement_id is None:
+            last_id = None
+        elif cell.placement_id != last_id:
             passes += cell.height
             last_id = cell.placement_id
 
@@ -347,11 +348,11 @@ def trace(state, start_slot) -> tuple[Result | int, int]:
 
 ### Loops are unreachable from the border
 
-Because every cell pairs its four faces bijectively, `follow` is an **involution** — re-entering
-a cell through the face you left returns you the way you came. The whole step relation is
-therefore reversible. To revisit a state the trace would need two predecessors, and the reverse
-trajectory would have to exit off-board. **A trace starting from a border slot can never loop.**
-Every trace terminates at another ring slot or at an empty cell.
+Because placed cells pair their four faces bijectively and starting crosses do the same,
+`follow` is an **involution** — re-entering a cell through the face you left returns you the way
+you came. The whole step relation is therefore reversible. To revisit a state the trace would
+need two predecessors, and the reverse trajectory would have to exit off-board. **A trace
+starting from a border slot can never loop.** Every valid trace terminates at another ring slot.
 
 ### And a trace can never return to its own slot
 
@@ -362,10 +363,11 @@ cannot lie on a cycle — nothing exists beyond the board edge — so it is a pa
 tracing from one endpoint reaches the other. A path with at least one edge has two *distinct*
 endpoints.
 
-So a trace from slot `s` ends either at `DEAD` or at a slot `t ≠ s`, always. `score_lines`
-therefore needs **no** `endpoint != slot` guard; an earlier draft carried one, and it was dead
-code. This holds only while every cell is a perfect matching of all four faces — if the tile set
-ever gains blank faces, the degree-≤2 argument fails and the guard must come back.
+So a trace from slot `s` ends at a slot `t ≠ s` on every valid board. `score_lines` therefore
+needs **no** `endpoint != slot` guard; an earlier draft carried one, and it was dead code. This
+holds only while every placed cell is a perfect matching of all four faces and uncovered cells
+remain printed crosses — if either gains blank faces, the degree-≤2 argument fails and the
+guard must come back.
 
 The `seen` guard and the `LOOP` result are kept regardless: three lines, and the difference
 between a bug and an infinite loop if the tile data is ever revised. Closed circuits do exist,

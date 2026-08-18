@@ -1,11 +1,10 @@
 """Line tracing.
 
-Because every cell pairs its four faces bijectively, `Cell.follow` is an
-involution and the whole step relation is reversible. A trace starting from a
-border slot therefore cannot loop: revisiting a state would require two
-predecessors, and the reverse trajectory would have to exit off-board. The
-LOOP guard is kept regardless -- it is three lines, and it is the difference
-between a bug and a hang if the tile data is ever revised.
+Printed starting crosses carry lines straight through uncovered cells for zero
+passes. Placed cells pair their four faces bijectively, so the whole step
+relation remains reversible. A trace starting from a border slot therefore
+cannot loop: revisiting a state would require two predecessors, and the reverse
+trajectory would have to exit off-board. The LOOP guard is kept regardless.
 """
 
 from __future__ import annotations
@@ -33,10 +32,9 @@ def trace_from(
         seen.add(key)
 
         cell = board.cells[row][col]
-        if cell.placement_id is None:
-            return (Result.DEAD, passes)
-
-        exit_face = cell.follow(entry)
+        # The board's printed + is an X path: it connects N-S and E-W but is
+        # not a tile, so crossing it contributes no passes.
+        exit_face = entry.opposite if cell.placement_id is None else cell.follow(entry)
         if exit_face is None:
             return (Result.DEAD, passes)
 
@@ -44,7 +42,10 @@ def trace_from(
         # may cross the same tile more than once and each crossing scores; a
         # set would silently eat the second pass. A seam crossing leaves
         # placement_id unchanged and correctly adds nothing.
-        if cell.placement_id != last_id:
+        if cell.placement_id is None:
+            # An uncovered cell separates visits to placed tiles.
+            last_id = None
+        elif cell.placement_id != last_id:
             passes += cell.height
             last_id = cell.placement_id
 

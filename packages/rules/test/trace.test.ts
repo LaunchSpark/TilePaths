@@ -17,20 +17,20 @@ describe("trace", () => {
     const b = emptyBoard(3);
     placeTile(b, [0, 0], [1, 0], 2, 0);
     const [end, passes] = trace(b, slotIndexOf(3, 0, 0, Side.N));
-    expect(end).toBe(Result.DEAD);
+    expect(end).toBe(slotIndexOf(3, 2, 0, Side.S));
     expect(passes).toBe(1);
   });
 
-  it("dies on an empty cell", () => {
+  it("continues straight through a starting cross", () => {
     const b = emptyBoard(3);
     placeTile(b, [0, 0], [0, 1], 2, 3);
     const [end, passes] = trace(b, slotIndexOf(3, 0, 0, Side.W));
-    expect(end).toBe(Result.DEAD);
+    expect(end).toBe(slotIndexOf(3, 0, 2, Side.E));
     expect(passes).toBe(1);
   });
 
-  it("returns zero passes from an empty board", () => {
-    expect(trace(emptyBoard(3), 0)).toEqual([Result.DEAD, 0]);
+  it("crosses an empty board for zero passes", () => {
+    expect(trace(emptyBoard(3), 0)).toEqual([slotIndexOf(3, 2, 0, Side.S), 0]);
   });
 
   // Tile 1 at orientation 1 lays out as (B west, A east).
@@ -41,7 +41,7 @@ describe("trace", () => {
     placeTile(b, [1, 1], [1, 0], 1, 1);
     placeTile(b, [0, 1], [0, 0], 1, 1);
     const [end, passes] = trace(b, slotIndexOf(3, 1, 0, Side.W));
-    expect(end).toBe(Result.DEAD);
+    expect(typeof end).toBe("number");
     expect(passes).toBe(3); // 2 if the second crossing were wrongly suppressed
   });
 
