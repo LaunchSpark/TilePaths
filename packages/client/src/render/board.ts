@@ -13,18 +13,17 @@ function strokeRect(ctx: CanvasRenderingContext2D, rect: Rect, colour: string, w
   ctx.strokeRect(rect.x + width / 2, rect.y + width / 2, rect.w - width, rect.h - width);
 }
 
-function drawCellGuide(ctx: CanvasRenderingContext2D, rect: Rect): void {
+function drawStartingPaths(ctx: CanvasRenderingContext2D, rect: Rect): void {
   const centreX = rect.x + rect.w / 2;
   const centreY = rect.y + rect.h / 2;
-  const arm = Math.min(rect.w, rect.h) * 0.18;
-  ctx.strokeStyle = "#c8c1b4";
-  ctx.lineWidth = 2;
-  ctx.lineCap = "round";
+  ctx.strokeStyle = "#1b1b1b";
+  ctx.lineWidth = Math.max(2, rect.w * 0.09);
+  ctx.lineCap = "butt";
   ctx.beginPath();
-  ctx.moveTo(centreX - arm, centreY);
-  ctx.lineTo(centreX + arm, centreY);
-  ctx.moveTo(centreX, centreY - arm);
-  ctx.lineTo(centreX, centreY + arm);
+  ctx.moveTo(rect.x, centreY);
+  ctx.lineTo(rect.x + rect.w, centreY);
+  ctx.moveTo(centreX, rect.y);
+  ctx.lineTo(centreX, rect.y + rect.h);
   ctx.stroke();
 }
 
@@ -62,8 +61,7 @@ export function drawBoard(
       const rect = cellRect(layout, row, col);
       const cell = view.cells[row]![col]!;
       if (cell.conns === null) {
-        strokeRect(ctx, rect, "#ddd7cb", 1);
-        drawCellGuide(ctx, rect);
+        drawStartingPaths(ctx, rect);
       } else {
         drawCellArt(ctx, rect, cell.conns, cell.height);
       }
