@@ -5,11 +5,13 @@ import { LocalSession } from "./session.js";
 import { Controller } from "./state.js";
 import { renderLog } from "./ui/log.js";
 import { renderPlayers } from "./ui/rail.js";
-import { renderTray } from "./ui/tray.js";
+import { createTileCanvas, renderTray } from "./ui/tray.js";
 import {
   endDragPreview,
   isDragPreviewActive,
+  moveDragPreview,
   rotateDragPreview,
+  startDragPreview,
 } from "./ui/drag-preview.js";
 
 const canvas = document.querySelector<HTMLCanvasElement>("#board")!;
@@ -28,6 +30,10 @@ const controller = new Controller(new LocalSession(Game.newGame(2, Date.now() & 
 const layout = layoutFor(controller.view().n, canvas.width);
 let hoverCell: [number, number] | null = null;
 let hoverPoint: [number, number] | null = null;
+let boardDragPointer: number | null = null;
+let boardDragStart: [number, number] = [0, 0];
+let boardDragMoved = false;
+let suppressBoardClick = false;
 
 function render(): void {
   if (hoverPoint !== null) {
@@ -122,6 +128,75 @@ canvas.addEventListener("mousemove", (event) => {
   if (changed) render();
 });
 
+canvas.addEventListener("pointerdown", (event) => {
+  if (event.button !== 0 || isDragPreviewActive()) return;
+  const [x, y] = boardPoint(event.clientX, event.clientY);
+  const hit = hitTest(x, y, layout);
+  if (hit.kind !== "cell" || !controller.beginReposition(hit.row, hit.col)) return;
+
+  const pileIndex = controller.selectedPile;
+  const typeId = pileIndex === null ? null : controller.view().piles[pileIndex]!.faceUp;
+  if (typeId === null) {
+    controller.handleAndRender({ kind: "escape" });
+    return;
+  }
+
+  event.preventDefault();
+  boardDragPointer = event.pointerId;
+  boardDragStart = [event.clientX, event.clientY];
+  boardDragMoved = false;
+  canvas.setPointerCapture(event.pointerId);
+  startDragPreview(createTileCanvas(typeId), event.clientX, event.clientY, controller.ghostOrientation);
+  updateHover(event.clientX, event.clientY);
+  controller.onChange?.();
+});
+
+canvas.addEventListener("pointermove", (event) => {
+  if (event.pointerId !== boardDragPointer) return;
+  if (Math.hypot(
+    event.clientX - boardDragStart[0], event.clientY - boardDragStart[1],
+  ) >= 4) boardDragMoved = true;
+  moveDragPreview(event.clientX, event.clientY);
+  updateHover(event.clientX, event.clientY);
+  drawBoard(ctx, layout, controller, hoverCell);
+});
+
+canvas.addEventListener("pointerup", (event) => {
+  if (event.pointerId !== boardDragPointer || event.button !== 0) return;
+  canvas.releasePointerCapture(event.pointerId);
+  boardDragPointer = null;
+  endDragPreview();
+  suppressBoardClick = true;
+  window.setTimeout(() => { suppressBoardClick = false; }, 0);
+
+  if (!boardDragMoved) {
+    controller.onChange?.();
+    return;
+  }
+
+  const [x, y] = boardPoint(event.clientX, event.clientY);
+  const anchor = placementAnchor(x, y, layout, controller.ghostOrientation);
+  hoverCell = null;
+  hoverPoint = null;
+  if (anchor === null) {
+    controller.handleAndRender({ kind: "escape" });
+    return;
+  }
+  controller.handleAndRender({
+    kind: "click",
+    hit: { kind: "cell", row: anchor[0], col: anchor[1] },
+  });
+});
+
+canvas.addEventListener("pointercancel", (event) => {
+  if (event.pointerId !== boardDragPointer) return;
+  boardDragPointer = null;
+  endDragPreview();
+  hoverCell = null;
+  hoverPoint = null;
+  controller.handleAndRender({ kind: "escape" });
+});
+
 canvas.addEventListener("mouseleave", () => {
   if (isDragPreviewActive()) return;
   hoverPoint = null;
@@ -130,6 +205,7 @@ canvas.addEventListener("mouseleave", () => {
 });
 
 canvas.addEventListener("click", (event) => {
+  if (suppressBoardClick) return;
   const [x, y] = boardPoint(event.clientX, event.clientY);
   const anchor = placementAnchor(x, y, layout, controller.ghostOrientation);
   controller.handleAndRender({

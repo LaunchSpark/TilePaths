@@ -107,4 +107,25 @@ describe("Tentative", () => {
     expect(() => tentative.add(place(1, [2, 2], [3, 2], 0))).toThrow();
     expect(tentative.moves.length).toBe(1);
   });
+
+  it("finds and replaces a pending placement without spending another action", () => {
+    const tentative = new Tentative(playing());
+    tentative.add(place(0, [2, 2], [3, 2], 0));
+
+    expect(tentative.placementAt([3, 2])?.index).toBe(0);
+    tentative.replace(0, place(0, [2, 3], [3, 3], 0));
+
+    expect(tentative.actionsLeft()).toBe(1);
+    expect(tentative.view().cells[2]![2]!.height).toBe(0);
+    expect(tentative.view().cells[2]![3]!.height).toBe(1);
+  });
+
+  it("keeps the original placement when a replacement is illegal", () => {
+    const tentative = new Tentative(playing());
+    tentative.add(place(0, [2, 2], [3, 2], 0));
+
+    expect(() => tentative.replace(0, place(0, [5, 2], [6, 2], 0))).toThrow();
+    expect(tentative.view().cells[2]![2]!.height).toBe(1);
+    expect(tentative.actionsLeft()).toBe(1);
+  });
 });

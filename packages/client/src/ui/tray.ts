@@ -26,6 +26,14 @@ function drawPileTile(canvas: HTMLCanvasElement, typeId: TypeId): void {
   ctx.strokeRect(1, 1, PILE_WIDTH - 2, PILE_HEIGHT - 2);
 }
 
+export function createTileCanvas(typeId: TypeId): HTMLCanvasElement {
+  const canvas = document.createElement("canvas");
+  canvas.width = PILE_WIDTH;
+  canvas.height = PILE_HEIGHT;
+  drawPileTile(canvas, typeId);
+  return canvas;
+}
+
 export function renderTray(
   root: HTMLElement,
   controller: Controller,

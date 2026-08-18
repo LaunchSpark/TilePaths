@@ -231,6 +231,11 @@ The client holds:
 Undo drops the last uncommitted move and recomputes the overlay. It cannot undo an action whose
 replacement has already been revealed.
 
+An uncommitted placed tile remains draggable on the board. Repositioning transactionally
+replaces that pending move in place, preserving its action count and orientation; an illegal or
+canceled drop restores the original placement. Pending dominoes use a subtle blue tint and
+dashed outline, which disappears as soon as the move is committed.
+
 `Game.apply()` still pops the replacement when it applies a placement. That is a detail *inside*
 the session: it happens at each commit, and the UI learns the new face-up tile from the returned
 view — exactly when a player would turn it over. A partial commit returns no `TurnResult`; only

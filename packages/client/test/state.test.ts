@@ -95,6 +95,47 @@ describe("placing a tile", () => {
     expect(current.view().actionsLeft).toBe(2);
   });
 
+  it("repositions an uncommitted tile without spending another action", () => {
+    const current = controller();
+    driveSetup(current);
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 2 } });
+
+    expect(current.beginReposition(3, 2)).toBe(true);
+    expect(current.ghostOrientation).toBe(0);
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 3 } });
+
+    expect(current.lastRejection).toBeNull();
+    expect(current.view().actionsLeft).toBe(1);
+    expect(current.view().cells[2]![2]!.height).toBe(0);
+    expect(current.view().cells[2]![3]!.height).toBe(1);
+  });
+
+  it("does not allow a committed tile to be repositioned", () => {
+    const current = controller();
+    driveSetup(current);
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 2 } });
+    current.handle({ kind: "commit" });
+
+    expect(current.beginReposition(2, 2)).toBe(false);
+  });
+
+  it("restores an uncommitted tile after an illegal reposition", () => {
+    const current = controller();
+    driveSetup(current);
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 2 } });
+    expect(current.beginReposition(2, 2)).toBe(true);
+
+    current.handle({ kind: "click", hit: { kind: "cell", row: 5, col: 2 } });
+
+    expect(current.lastRejection).not.toBeNull();
+    expect(current.state).toBe("idle");
+    expect(current.view().cells[2]![2]!.height).toBe(1);
+    expect(current.view().actionsLeft).toBe(1);
+  });
+
   it("refuses a pile already spent this turn", () => {
     const current = controller();
     driveSetup(current);

@@ -87,6 +87,26 @@ export function drawBoard(
     }
   }
 
+  // Pending placements are movable until committed. A restrained tint and
+  // dashed outline distinguish them without obscuring their path artwork.
+  for (const move of controller.pendingPlacements) {
+    const [dr, dc] = offsetOf(move.orientation);
+    const first = cellRect(layout, move.cellA[0], move.cellA[1]);
+    const second = cellRect(layout, move.cellA[0] + dr, move.cellA[1] + dc);
+    const bounds: Rect = {
+      x: Math.min(first.x, second.x),
+      y: Math.min(first.y, second.y),
+      w: Math.max(first.x + first.w, second.x + second.w) - Math.min(first.x, second.x),
+      h: Math.max(first.y + first.h, second.y + second.h) - Math.min(first.y, second.y),
+    };
+    ctx.save();
+    ctx.fillStyle = "rgba(47, 111, 208, 0.10)";
+    ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+    ctx.setLineDash([6, 4]);
+    strokeRect(ctx, bounds, "#2f6fd0", 2);
+    ctx.restore();
+  }
+
   view.ring.forEach((slot, index) => {
     if (slot.occupant === null) return;
     const rect = slotRect(layout, index);

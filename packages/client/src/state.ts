@@ -28,6 +28,7 @@ export class Controller {
   selectedPile: number | null = null;
   selectedMarker: number | null = null;
   ghostOrientation = 0;
+  editingPlacementIndex: number | null = null;
   markerDestinations: Destination[] = [];
   lastRejection: string | null = null;
   log: TurnResult[] = [];
@@ -40,7 +41,9 @@ export class Controller {
   }
 
   view(): GameView {
-    return this.state === "setup" ? this.session.getView() : this.tentative.view();
+    return this.state === "setup"
+      ? this.session.getView()
+      : this.tentative.view(this.editingPlacementIndex);
   }
 
   isSpent(pileIndex: number): boolean {
@@ -49,6 +52,23 @@ export class Controller {
 
   get pendingActions(): number {
     return this.tentative.moves.length;
+  }
+
+  get pendingPlacements(): readonly Extract<Move, { kind: "place" }>[] {
+    return this.tentative.placementsExcept(this.editingPlacementIndex);
+  }
+
+  beginReposition(row: number, col: number): boolean {
+    if (this.state !== "idle") return false;
+    const found = this.tentative.placementAt([row, col]);
+    if (found === null) return false;
+    this.clearSelection();
+    this.editingPlacementIndex = found.index;
+    this.selectedPile = found.move.pileIndex;
+    this.ghostOrientation = found.move.orientation;
+    this.state = "tileSelected";
+    this.lastRejection = null;
+    return true;
   }
 
   handle(input: UiInput): void {
@@ -70,6 +90,7 @@ export class Controller {
     this.selectedMarker = null;
     this.markerDestinations = [];
     this.ghostOrientation = 0;
+    this.editingPlacementIndex = null;
   }
 
   private dispatch(input: UiInput): void {
@@ -200,7 +221,19 @@ export class Controller {
       cellB: [normalized.anchor[0] + dr, normalized.anchor[1] + dc],
       orientation: normalized.orientation,
     };
-    this.tentative.add(move);
+    if (this.editingPlacementIndex === null) {
+      this.tentative.add(move);
+    } else {
+      try {
+        this.tentative.replace(this.editingPlacementIndex, move);
+      } catch (error) {
+        // Repositioning is transactional: an illegal drop restores the
+        // original pending placement instead of leaving it hidden in edit mode.
+        this.clearSelection();
+        this.state = "idle";
+        throw error;
+      }
+    }
     this.clearSelection();
     this.state = "idle";
   }
