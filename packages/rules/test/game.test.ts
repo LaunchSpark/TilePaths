@@ -157,8 +157,12 @@ describe("turns", () => {
     expect(() => setup().apply(marker(0, 3))).toThrow();
   });
 
+  // The message argument is load-bearing. A bare toThrow() passes with OR
+  // without the Number.isInteger guard: unguarded, markerSlots[1.5] is
+  // undefined, Ring.move(undefined, 1) is NaN, and ring[NaN].occupant throws a
+  // TypeError. Matching the validation text is what makes this discriminate.
   it("rejects a non-integer marker index", () => {
-    expect(() => setup().apply(marker(1.5, 1))).toThrow();
+    expect(() => setup().apply(marker(1.5, 1))).toThrow(/no marker with index/);
   });
 
   it("moves a marker and preserves its id", () => {
