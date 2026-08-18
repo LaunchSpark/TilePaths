@@ -70,8 +70,9 @@ packages/
       render/board.ts canvas draw loop
       render/tiles.ts line art from conns
       ui/{tray,rail,log}.ts
-passtally/            Python engine -- RETAINED as oracle, never shipped
-tools/
+reference/            Python engine -- RETAINED as oracle, never shipped
+  passtally/          the engine, unchanged
+  tests/              its 182 tests
   gen_oracle.py       emits differential fixtures from the Python engine
 ```
 
@@ -130,7 +131,7 @@ The Python engine is retained — not shipped, not maintained as a parallel impl
 kept as a **reference to test against**. This gives the TypeScript port something the Python
 engine never had for itself: an independent implementation to disagree with.
 
-`tools/gen_oracle.py` runs random playouts through the Python engine and records, per fixture:
+`reference/gen_oracle.py` runs random playouts through the Python engine and records, per fixture:
 
 - the explicit dealt piles (not a seed)
 - the setup marker placements in order

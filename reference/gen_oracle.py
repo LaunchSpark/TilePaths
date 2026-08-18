@@ -5,20 +5,25 @@ complete random playout -- the explicit deal, the setup placements, every move,
 and a portable state digest AFTER EVERY ACTION -- so the TypeScript port can
 replay it and be checked step by step.
 
-Run: PYTHONPATH=. python tools/gen_oracle.py
+Run from anywhere: python reference/gen_oracle.py
 """
 
 from __future__ import annotations
 
 import json
 import random
+import sys
 from pathlib import Path
 
-from passtally import config
-from passtally.game import Game
-from passtally.types import MoveMarker, PlaceTile
+# Resolved from this file, not the cwd, so the generator runs from anywhere.
+_REPO = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-OUT = Path("packages/rules/test/fixtures/oracle")
+from passtally import config  # noqa: E402  (needs sys.path above)
+from passtally.game import Game  # noqa: E402
+from passtally.types import PlaceTile  # noqa: E402
+
+OUT = _REPO / "packages" / "rules" / "test" / "fixtures" / "oracle"
 N_FIXTURES = 25
 MAX_ACTIONS = 400
 
