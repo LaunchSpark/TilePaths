@@ -27,7 +27,7 @@ function cellViews(board: Board): CellView[][] {
       const cell = board.cells[row]![col]!;
       out.push({
         height: cell.height,
-        conns: cell.height === 0 ? null : cell.conns.map(([a, b]) => [a, b]),
+        conns: cell.height ? cell.conns.map(([a, b]) => [a, b]) : null,
         partner: partnerOffset(board, row, col),
       });
     }
