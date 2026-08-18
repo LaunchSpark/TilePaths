@@ -2,7 +2,10 @@ import { offsetOf } from "@passtally/rules";
 import type { TypeId } from "@passtally/rules";
 import { cellRect, slotRect, unit } from "../geometry.js";
 import type { Layout, Rect } from "../geometry.js";
+import type { HighlightedPath } from "../path-highlight.js";
 import type { Controller } from "../state.js";
+import type { GameView } from "../types.js";
+import { drawPathHighlights } from "./highlights.js";
 import { drawCellArt, levelFill } from "./tiles.js";
 
 const PLAYER_COLOURS = ["#2f6fd0", "#d0562f", "#3fa05a"];
@@ -31,9 +34,10 @@ export function drawBoard(
   ctx: CanvasRenderingContext2D,
   layout: Layout,
   controller: Controller,
+  view: GameView,
   hoverCell: [number, number] | null,
+  highlighted: readonly HighlightedPath[] = [],
 ): void {
-  const view = controller.view();
   const size = unit(layout);
 
   ctx.fillStyle = "#e7e2d8";
@@ -153,4 +157,6 @@ export function drawBoard(
       ctx.globalAlpha = 1;
     }
   }
+
+  drawPathHighlights(ctx, layout, highlighted);
 }

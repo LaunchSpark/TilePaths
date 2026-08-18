@@ -1,5 +1,10 @@
 import { Game, config } from "@passtally/rules";
-import { hitTest, layoutFor, placementAnchor } from "./geometry.js";
+import { hitTest, layoutFor, placementAnchor, slotRect } from "./geometry.js";
+import {
+  PathHighlightCache,
+  pathTopologyKey,
+} from "./path-highlight.js";
+import type { GhostPlacement } from "./path-highlight.js";
 import { drawBoard } from "./render/board.js";
 import { LocalSession } from "./session.js";
 import { Controller } from "./state.js";
@@ -28,12 +33,35 @@ const status = document.querySelector<HTMLElement>("#status")!;
 
 const controller = new Controller(new LocalSession(Game.newGame(2, Date.now() & 0xffff)));
 const layout = layoutFor(controller.view().n, canvas.width);
+const pathHighlightCache = new PathHighlightCache();
+let boardRevision = 0;
+let renderedView = controller.view();
+let topologySnapshot = pathTopologyKey(renderedView);
 let hoverCell: [number, number] | null = null;
+let hoverSlot: number | null = null;
 let hoverPoint: [number, number] | null = null;
 let boardDragPointer: number | null = null;
 let boardDragStart: [number, number] = [0, 0];
 let boardDragMoved = false;
 let suppressBoardClick = false;
+
+function currentGhost(): GhostPlacement | null {
+  if (controller.state !== "tileSelected" || hoverCell === null) return null;
+  const pileIndex = controller.selectedPile;
+  if (pileIndex === null) return null;
+  const typeId = renderedView.piles[pileIndex]?.faceUp;
+  return typeId == null
+    ? null
+    : { anchor: hoverCell, typeId, orientation: controller.ghostOrientation };
+}
+
+function drawBoardFrame(): void {
+  const highlighted = pathHighlightCache.get(renderedView, {
+    hoveredSlot: hoverSlot,
+    ghost: currentGhost(),
+  }, boardRevision);
+  drawBoard(ctx, layout, controller, renderedView, hoverCell, highlighted);
+}
 
 function render(): void {
   if (hoverPoint !== null) {
@@ -41,19 +69,26 @@ function render(): void {
       hoverPoint[0], hoverPoint[1], layout, controller.ghostOrientation,
     );
   }
-  const view = controller.view();
-  drawBoard(ctx, layout, controller, hoverCell);
+  renderedView = controller.view();
+  const nextTopology = pathTopologyKey(renderedView);
+  if (nextTopology !== topologySnapshot) {
+    topologySnapshot = nextTopology;
+    boardRevision += 1;
+  }
+  const view = renderedView;
+  drawBoardFrame();
   // Keep the pointer-capturing source in the DOM until the drag finishes.
   if (!isDragPreviewActive()) renderTray(trayRoot, controller, {
     move: (clientX, clientY) => {
       updateHover(clientX, clientY);
-      drawBoard(ctx, layout, controller, hoverCell);
+      drawBoardFrame();
     },
     drop: (pileIndex, clientX, clientY) => {
       const rect = canvas.getBoundingClientRect();
       const onBoard = clientX >= rect.left && clientX <= rect.right
         && clientY >= rect.top && clientY <= rect.bottom;
       hoverCell = null;
+      hoverSlot = null;
       hoverPoint = null;
       if (!onBoard) {
         controller.handleAndRender({ kind: "escape" });
@@ -117,14 +152,26 @@ function updateHover(clientX: number, clientY: number): void {
   const [x, y] = boardPoint(clientX, clientY);
   hoverPoint = [x, y];
   hoverCell = placementAnchor(x, y, layout, controller.ghostOrientation);
+  const hit = hitTest(x, y, layout);
+  hoverSlot = null;
+  if (hit.kind === "slot" && renderedView.ring[hit.index]?.occupant !== null) {
+    const rect = slotRect(layout, hit.index);
+    const radius = rect.w * 0.3;
+    if (Math.hypot(x - (rect.x + rect.w / 2), y - (rect.y + rect.h / 2)) <= radius) {
+      hoverSlot = hit.index;
+    }
+  }
 }
 
 controller.onChange = render;
 
 canvas.addEventListener("mousemove", (event) => {
   const before = hoverCell;
+  const beforeSlot = hoverSlot;
   updateHover(event.clientX, event.clientY);
-  const changed = JSON.stringify(hoverCell) !== JSON.stringify(before);
+  const changed = hoverSlot !== beforeSlot
+    || hoverCell?.[0] !== before?.[0]
+    || hoverCell?.[1] !== before?.[1];
   if (changed) render();
 });
 
@@ -158,7 +205,7 @@ canvas.addEventListener("pointermove", (event) => {
   ) >= 4) boardDragMoved = true;
   moveDragPreview(event.clientX, event.clientY);
   updateHover(event.clientX, event.clientY);
-  drawBoard(ctx, layout, controller, hoverCell);
+  drawBoardFrame();
 });
 
 canvas.addEventListener("pointerup", (event) => {
@@ -177,6 +224,7 @@ canvas.addEventListener("pointerup", (event) => {
   const [x, y] = boardPoint(event.clientX, event.clientY);
   const anchor = placementAnchor(x, y, layout, controller.ghostOrientation);
   hoverCell = null;
+  hoverSlot = null;
   hoverPoint = null;
   if (anchor === null) {
     controller.handleAndRender({ kind: "escape" });
@@ -193,6 +241,7 @@ canvas.addEventListener("pointercancel", (event) => {
   boardDragPointer = null;
   endDragPreview();
   hoverCell = null;
+  hoverSlot = null;
   hoverPoint = null;
   controller.handleAndRender({ kind: "escape" });
 });
@@ -201,6 +250,7 @@ canvas.addEventListener("mouseleave", () => {
   if (isDragPreviewActive()) return;
   hoverPoint = null;
   hoverCell = null;
+  hoverSlot = null;
   render();
 });
 

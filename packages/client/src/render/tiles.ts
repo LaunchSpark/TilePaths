@@ -9,6 +9,26 @@ function facePoint(rect: Rect, side: Side): [number, number] {
   return [x, y + h / 2];
 }
 
+/** Draw one connection using the caller's stroke style. Shared by normal tile
+ * art and overlays so previews exactly follow the rendered path geometry. */
+export function drawConnection(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  a: Side,
+  b: Side,
+): void {
+  const [ax, ay] = facePoint(rect, a);
+  const [bx, by] = facePoint(rect, b);
+  ctx.beginPath();
+  ctx.moveTo(ax, ay);
+  if ((a + 2) % 4 === b) {
+    ctx.lineTo(bx, by);
+  } else {
+    ctx.quadraticCurveTo(rect.x + rect.w / 2, rect.y + rect.h / 2, bx, by);
+  }
+  ctx.stroke();
+}
+
 export function levelFill(level: number): string {
   return `hsl(38 42% ${Math.max(28, 82 - (level - 1) * 16)}%)`;
 }
@@ -26,16 +46,7 @@ export function drawCellArt(
   ctx.lineCap = "round";
 
   for (const [a, b] of conns) {
-    const [ax, ay] = facePoint(rect, a);
-    const [bx, by] = facePoint(rect, b);
-    ctx.beginPath();
-    ctx.moveTo(ax, ay);
-    if ((a + 2) % 4 === b) {
-      ctx.lineTo(bx, by);
-    } else {
-      ctx.quadraticCurveTo(rect.x + rect.w / 2, rect.y + rect.h / 2, bx, by);
-    }
-    ctx.stroke();
+    drawConnection(ctx, rect, a, b);
   }
 
   if (level > 1) {
