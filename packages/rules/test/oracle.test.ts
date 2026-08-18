@@ -2,6 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { MARKERS_PER_PLAYER, N_PILES } from "../src/config.js";
 import { digest } from "../src/digest.js";
 import { Game } from "../src/game.js";
 import type { Move, TypeId } from "../src/types.js";
@@ -23,6 +24,15 @@ describe("differential oracle", () => {
 
   it.each(FILES)("%s replays identically", (file) => {
     const fx: Fixture = JSON.parse(readFileSync(join(DIR, file), "utf-8"));
+
+    // Guard against a truncated/corrupted fixture passing vacuously: if
+    // `steps` were ever [], the replay loop below would iterate zero times,
+    // `expect` would never run, and vitest would report this test as passed
+    // having verified nothing. Assert the fixture is substantive before the
+    // replay so a hollow fixture fails loudly instead of passing silently.
+    expect(fx.steps.length, `${file} has no steps`).toBeGreaterThan(0);
+    expect(fx.setup.length, `${file} has a truncated setup`).toBe(fx.nPlayers * MARKERS_PER_PLAYER);
+    expect(fx.deal.length, `${file} has a truncated deal`).toBe(N_PILES);
 
     // Seeds do not port (T5), so install the recorded deal directly.
     const game = Game.newGame(fx.nPlayers, 0, fx.boardSize);
