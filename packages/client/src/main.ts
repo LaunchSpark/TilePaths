@@ -1,5 +1,5 @@
 import { Game, config } from "@passtally/rules";
-import { hitTest, layoutFor } from "./geometry.js";
+import { hitTest, layoutFor, placementAnchor } from "./geometry.js";
 import { drawBoard } from "./render/board.js";
 import { LocalSession } from "./session.js";
 import { Controller } from "./state.js";
@@ -27,8 +27,14 @@ const status = document.querySelector<HTMLElement>("#status")!;
 const controller = new Controller(new LocalSession(Game.newGame(2, Date.now() & 0xffff)));
 const layout = layoutFor(controller.view().n, canvas.width);
 let hoverCell: [number, number] | null = null;
+let hoverPoint: [number, number] | null = null;
 
 function render(): void {
+  if (hoverPoint !== null) {
+    hoverCell = placementAnchor(
+      hoverPoint[0], hoverPoint[1], layout, controller.ghostOrientation,
+    );
+  }
   const view = controller.view();
   drawBoard(ctx, layout, controller, hoverCell);
   // Keep the pointer-capturing source in the DOM until the drag finishes.
@@ -42,6 +48,7 @@ function render(): void {
       const onBoard = clientX >= rect.left && clientX <= rect.right
         && clientY >= rect.top && clientY <= rect.bottom;
       hoverCell = null;
+      hoverPoint = null;
       if (!onBoard) {
         controller.handleAndRender({ kind: "escape" });
         return;
@@ -50,7 +57,11 @@ function render(): void {
         controller.handle({ kind: "selectPile", pileIndex });
       }
       const [x, y] = boardPoint(clientX, clientY);
-      controller.handleAndRender({ kind: "click", hit: hitTest(x, y, layout) });
+      const anchor = placementAnchor(x, y, layout, controller.ghostOrientation);
+      controller.handleAndRender({
+        kind: "click",
+        hit: anchor === null ? { kind: "none" } : { kind: "cell", row: anchor[0], col: anchor[1] },
+      });
     },
   });
   rotateDragPreview(controller.ghostOrientation);
@@ -100,8 +111,8 @@ function boardPoint(clientX: number, clientY: number): [number, number] {
 
 function updateHover(clientX: number, clientY: number): void {
   const [x, y] = boardPoint(clientX, clientY);
-  const hit = hitTest(x, y, layout);
-  hoverCell = hit.kind === "cell" ? [hit.row, hit.col] : null;
+  hoverPoint = [x, y];
+  hoverCell = placementAnchor(x, y, layout, controller.ghostOrientation);
 }
 
 controller.onChange = render;
@@ -113,11 +124,19 @@ canvas.addEventListener("mousemove", (event) => {
   if (changed) render();
 });
 
+canvas.addEventListener("mouseleave", () => {
+  if (isDragPreviewActive()) return;
+  hoverPoint = null;
+  hoverCell = null;
+  render();
+});
+
 canvas.addEventListener("click", (event) => {
   const [x, y] = boardPoint(event.clientX, event.clientY);
+  const anchor = placementAnchor(x, y, layout, controller.ghostOrientation);
   controller.handleAndRender({
     kind: "click",
-    hit: hitTest(x, y, layout),
+    hit: anchor === null ? hitTest(x, y, layout) : { kind: "cell", row: anchor[0], col: anchor[1] },
   });
 });
 

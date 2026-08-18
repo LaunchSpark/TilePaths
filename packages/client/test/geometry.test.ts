@@ -1,6 +1,6 @@
 import { buildRing, slotIndexOf } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
-import { cellRect, hitTest, layoutFor, slotRect, unit } from "../src/geometry.js";
+import { cellRect, hitTest, layoutFor, placementAnchor, slotRect, unit } from "../src/geometry.js";
 
 const SIZES = [4, 5, 6, 7, 8];
 const layout = (n: number) => layoutFor(n, 500);
@@ -79,5 +79,45 @@ describe("rects", () => {
       const rect = slotRect(current, index);
       expect(hitTest(rect.x + rect.w / 2, rect.y + rect.h / 2, current)).toEqual({ kind: "slot", index });
     }
+  });
+});
+
+describe("placementAnchor", () => {
+  const current = layout(6);
+  const rect = cellRect(current, 2, 2);
+  const point = (x: number, y: number): [number, number] => [
+    rect.x + rect.w * x,
+    rect.y + rect.h * y,
+  ];
+
+  it("moves a south-facing vertical tile above the cursor in the north triangle", () => {
+    const [x, y] = point(0.5, 0.1);
+    expect(placementAnchor(x, y, current, 0)).toEqual([1, 2]);
+  });
+
+  it("leaves a south-facing vertical tile below the cursor in the south triangle", () => {
+    const [x, y] = point(0.5, 0.9);
+    expect(placementAnchor(x, y, current, 0)).toEqual([2, 2]);
+  });
+
+  it("snaps horizontal footprints toward the west and east triangles", () => {
+    const [westX, westY] = point(0.1, 0.5);
+    const [eastX, eastY] = point(0.9, 0.5);
+    expect(placementAnchor(westX, westY, current, 3)).toEqual([2, 1]);
+    expect(placementAnchor(eastX, eastY, current, 3)).toEqual([2, 2]);
+  });
+
+  it("preserves cell A and the artwork when orientation points toward the triangle", () => {
+    const [x, y] = point(0.5, 0.1);
+    expect(placementAnchor(x, y, current, 2)).toEqual([2, 2]);
+  });
+
+  it("ignores perpendicular triangles", () => {
+    const [x, y] = point(0.1, 0.5);
+    expect(placementAnchor(x, y, current, 0)).toEqual([2, 2]);
+  });
+
+  it("returns null outside a grid cell", () => {
+    expect(placementAnchor(10, 10, current, 0)).toBeNull();
   });
 });

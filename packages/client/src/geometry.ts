@@ -1,4 +1,5 @@
-import { Side, slotIndexOf } from "@passtally/rules";
+import { Side, offsetOf, slotIndexOf } from "@passtally/rules";
+import type { Pos } from "@passtally/rules";
 
 export type Layout = {
   originX: number;
@@ -54,6 +55,41 @@ export function cellRect(layout: Layout, row: number, col: number): Rect {
     w: size,
     h: size,
   };
+}
+
+/** Choose which cell owns the tile's A half based on the pointer's nearest
+ * edge. Only triangles on the tile's current axis alter the footprint; the
+ * perpendicular triangles retain its current A-to-B direction. */
+export function placementAnchor(
+  px: number,
+  py: number,
+  layout: Layout,
+  orientation: number,
+): Pos | null {
+  const hit = hitTest(px, py, layout);
+  if (hit.kind !== "cell") return null;
+
+  const rect = cellRect(layout, hit.row, hit.col);
+  const dx = px - (rect.x + rect.w / 2);
+  const dy = py - (rect.y + rect.h / 2);
+  const triangle = Math.abs(dx) > Math.abs(dy)
+    ? dx < 0 ? Side.W : Side.E
+    : dy < 0 ? Side.N : Side.S;
+
+  const [dr, dc] = offsetOf(orientation);
+  const desired: Pos = triangle === Side.N ? [-1, 0]
+    : triangle === Side.E ? [0, 1]
+      : triangle === Side.S ? [1, 0]
+        : [0, -1];
+  const sameAxis = (dr !== 0 && desired[0] !== 0) || (dc !== 0 && desired[1] !== 0);
+
+  // If the pointer is nearer the end opposite B, put A in the adjacent cell.
+  // This keeps the hovered cell under the near half of the domino without
+  // changing orientation (and therefore without swapping its artwork).
+  if (sameAxis && (dr !== desired[0] || dc !== desired[1])) {
+    return [hit.row + desired[0], hit.col + desired[1]];
+  }
+  return [hit.row, hit.col];
 }
 
 export function slotRect(layout: Layout, slotIndex: number): Rect {
