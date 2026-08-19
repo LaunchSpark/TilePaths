@@ -125,6 +125,29 @@ export function drawBoard(
     }
   }
 
+  // Legal-anchor tint: which cells could receive the selected tile at its
+  // current orientation, independent of where the pointer currently sits.
+  // `legalAnchors()` is a plain cached getter (recomputed only on selection,
+  // rotation or board change -- see Controller.recomputeLegalAnchors), so
+  // calling it here every render frame, including every mousemove, does not
+  // re-run the canPlace scan each time.
+  if (controller.state === "tileSelected") {
+    const [dr, dc] = offsetOf(controller.ghostOrientation);
+    ctx.save();
+    ctx.fillStyle = "rgba(63, 160, 90, 0.16)";
+    for (const [row, col] of controller.legalAnchors()) {
+      const anchorRect = cellRect(layout, row, col);
+      ctx.fillRect(anchorRect.x, anchorRect.y, anchorRect.w, anchorRect.h);
+      const partnerRow = row + dr;
+      const partnerCol = col + dc;
+      if (partnerRow >= 0 && partnerCol >= 0 && partnerRow < view.n && partnerCol < view.n) {
+        const partnerRect = cellRect(layout, partnerRow, partnerCol);
+        ctx.fillRect(partnerRect.x, partnerRect.y, partnerRect.w, partnerRect.h);
+      }
+    }
+    ctx.restore();
+  }
+
   if (controller.state === "tileSelected" && hoverCell !== null) {
     const faceUp = view.piles[controller.selectedPile!]!.faceUp as TypeId | null;
     if (faceUp !== null) {

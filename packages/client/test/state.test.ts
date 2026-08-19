@@ -1,6 +1,6 @@
 import { Game } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
-import { controllerOn, scoringBoard } from "./fixtures.js";
+import { controllerInPlay, controllerOn, scoringBoard } from "./fixtures.js";
 import { LocalSession } from "../src/session.js";
 import { Controller } from "../src/state.js";
 import { setupOrder } from "../src/view.js";
@@ -306,5 +306,43 @@ describe("visible lines", () => {
     c.handle({ kind: "selectPile", pileIndex: 0 });
     c.handle({ kind: "hover", cell: [2, 2] });
     expect(new Set(c.visibleLines().map((l) => l.owner))).toEqual(new Set([0]));
+  });
+});
+
+describe("legal-anchor highlighting", () => {
+  it("offers no anchors when no tile is selected", () => {
+    expect(controllerInPlay().legalAnchors()).toEqual([]);
+  });
+
+  it("offers every legal anchor for the selected tile and orientation", () => {
+    const c = controllerInPlay();
+    c.handle({ kind: "selectPile", pileIndex: 0 });
+    // Orientation 0 puts cell B south of the anchor, so the last row is excluded.
+    expect(c.legalAnchors().length).toBe(6 * 5);
+    expect(c.legalAnchors().some(([row]) => row === 5)).toBe(false);
+  });
+
+  it("changes with rotation", () => {
+    const c = controllerInPlay();
+    c.handle({ kind: "selectPile", pileIndex: 0 });
+    const before = c.legalAnchors();
+    c.handle({ kind: "rotate" });
+    expect(c.legalAnchors()).not.toEqual(before);
+  });
+
+  it("consults canPlace rather than assuming every in-bounds anchor is legal", () => {
+    // scoringBoard() is a 3x3 board whose rows 0-1 are already fully covered
+    // by three south-facing dominoes, one per column (see fixtures.ts). At
+    // pile 0's default orientation 0 (south), every anchor in rows 0-1
+    // straddles one of those existing tiles, and row 2 (the last row) runs
+    // the second cell off the board -- so every in-bounds anchor for this
+    // orientation is illegal, even though bounds-only reasoning would report
+    // the 6 cells in rows 0-1 (task-5-report.md independently confirms no
+    // south-facing placement is legal anywhere on this board). A
+    // legalAnchors() that merely enumerated in-bounds cells without asking
+    // canPlace would wrongly return those 6; the real answer is none.
+    const c = controllerOn(scoringBoard());
+    c.handle({ kind: "selectPile", pileIndex: 0 });
+    expect(c.legalAnchors()).toEqual([]);
   });
 });

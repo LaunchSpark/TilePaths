@@ -38,6 +38,7 @@ export class Controller {
   lastRejection: string | null = null;
   log: TurnResult[] = [];
   onChange: (() => void) | null = null;
+  private legalAnchorsCache: Pos[] = [];
 
   constructor(session: LocalSession) {
     this.session = session;
@@ -78,6 +79,41 @@ export class Controller {
     return { view, board };
   }
 
+  /** Cells where the selected tile, at its current orientation, could legally
+   *  land -- recomputed only on selection/rotation/board change (see
+   *  `recomputeLegalAnchors`), never on hover, since legality does not depend
+   *  on the cursor and render() already runs this on every pointer move. */
+  legalAnchors(): Pos[] {
+    return this.legalAnchorsCache;
+  }
+
+  /** Asks the rules package's `canPlace` for legality rather than
+   *  reimplementing it here. Called only from the mutation sites that can
+   *  actually change the answer: selecting a pile, rotating, and beginning
+   *  a reposition -- never from hover or the render loop. */
+  private recomputeLegalAnchors(): void {
+    if (this.state !== "tileSelected" || this.selectedPile === null) {
+      this.legalAnchorsCache = [];
+      return;
+    }
+    const { view, board } = this.viewAndBoard();
+    const typeId = view.piles[this.selectedPile]?.faceUp;
+    if (typeId == null) {
+      this.legalAnchorsCache = [];
+      return;
+    }
+    const [dr, dc] = offsetOf(this.ghostOrientation);
+    const anchors: Pos[] = [];
+    for (let row = 0; row < board.n; row++) {
+      for (let col = 0; col < board.n; col++) {
+        const anchor: Pos = [row, col];
+        const cellB: Pos = [row + dr, col + dc];
+        if (canPlace(board, anchor, cellB)) anchors.push(anchor);
+      }
+    }
+    this.legalAnchorsCache = anchors;
+  }
+
   private ghostOnLegalAnchor(view: GameView, board: Board): boolean {
     if (this.state !== "tileSelected" || this.hoveredCell === null) return false;
     const pileIndex = this.selectedPile;
@@ -107,6 +143,7 @@ export class Controller {
     this.ghostOrientation = found.move.orientation;
     this.state = "tileSelected";
     this.lastRejection = null;
+    this.recomputeLegalAnchors();
     return true;
   }
 
@@ -133,6 +170,7 @@ export class Controller {
     this.markerDestinations = [];
     this.ghostOrientation = 0;
     this.editingPlacementIndex = null;
+    this.legalAnchorsCache = [];
   }
 
   private dispatch(input: UiInput): void {
@@ -180,6 +218,7 @@ export class Controller {
     this.clearSelection();
     this.selectedPile = pileIndex;
     this.state = "tileSelected";
+    this.recomputeLegalAnchors();
   }
 
   private onSelectMarker(markerIndex: number): void {
@@ -213,6 +252,7 @@ export class Controller {
   private onRotate(direction: -1 | 1 = 1): void {
     if (this.state !== "tileSelected") return;
     this.ghostOrientation = (this.ghostOrientation + direction + 4) % 4;
+    this.recomputeLegalAnchors();
   }
 
   private onUndo(): void {

@@ -44,3 +44,10 @@ export function selfCrossingBoard(): Game {
 export function controllerOn(game: Game): Controller {
   return new Controller(new LocalSession(game));
 }
+
+/** A Controller already past setup, on an empty board, ready to select a
+ *  pile and place a tile -- setup is fully driven by `emptyPlay` itself, so
+ *  the Controller's constructor observes phase "play" and starts in "idle". */
+export function controllerInPlay(nPlayers = 2, boardSize = 6): Controller {
+  return controllerOn(emptyPlay(nPlayers, boardSize));
+}
