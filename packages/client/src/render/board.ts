@@ -7,7 +7,7 @@ import type { GameView } from "../types.js";
 import { drawPathHighlights } from "./highlights.js";
 import { drawCellArt, levelFill } from "./tiles.js";
 
-const PLAYER_COLOURS = ["#2f6fd0", "#d0562f", "#3fa05a"];
+export const PLAYER_COLOURS = ["#2f6fd0", "#d0562f", "#3fa05a"];
 
 function strokeRect(ctx: CanvasRenderingContext2D, rect: Rect, colour: string, width: number): void {
   ctx.strokeStyle = colour;
