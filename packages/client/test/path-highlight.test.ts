@@ -1,4 +1,4 @@
-import { Game, Side, slotIndexOf, tracePath } from "@passtally/rules";
+import { Game, placeTile, Side, slotIndexOf, tracePath } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
 import {
   highlightedPaths,
@@ -67,6 +67,29 @@ describe("path highlighting", () => {
     const without = hypotheticalBoard(t, null);
     expect(withGhost.cells[2]![2]!.placementId).not.toBeNull();
     expect(without.cells[2]![2]!.placementId).toBeNull();
+  });
+
+  it("does not place an illegal ghost -- a hovering cursor is not always over a legal anchor", () => {
+    const t = new Tentative(playing());
+    const faceUp = t.view().piles[0]!.faceUp!;
+    // Orientation 0 offsets cellB to [row + 1, col]. Anchored on the board's
+    // last row, cellB falls off a 6-wide board, so canPlace must reject it.
+    const board = hypotheticalBoard(t, { anchor: [5, 5], typeId: faceUp, orientation: 0 });
+    expect(board.cells[5]![5]!.placementId).toBeNull();
+  });
+
+  it("does not place a ghost whose two cells have mismatched heights", () => {
+    const session = playing();
+    // A real tile at [1,1]-[1,0] raises both cells to height 1.
+    placeTile(session.game.board, [1, 1], [1, 0], 2, 0);
+    const t = new Tentative(session);
+    const faceUp = t.view().piles[0]!.faceUp!;
+    // Orientation 3 offsets cellB to [row, col + 1] -- [1,1] (height 1) next
+    // to [1,2] (height 0, still bare). canPlace's height-match rule must
+    // reject this even though both cells are in bounds and unoccupied by a
+    // marker.
+    const board = hypotheticalBoard(t, { anchor: [1, 1], typeId: faceUp, orientation: 3 });
+    expect(board.cells[1]![2]!.placementId).toBeNull();
   });
 
   it("only highlights a ring slot when it contains a token", () => {
