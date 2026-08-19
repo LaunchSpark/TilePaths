@@ -3,6 +3,7 @@ import type { Layout } from "../geometry.js";
 import { cellRect, slotRect } from "../geometry.js";
 import type { LineView } from "../lines.js";
 import { PLAYER_COLOURS } from "./board.js";
+import { assignLanes, laneKey, offsetFor } from "./offset.js";
 import { drawConnection } from "./tiles.js";
 
 export function drawPathHighlights(
@@ -31,6 +32,48 @@ export function drawPathHighlights(
         step.exit,
       );
     }
+  }
+  ctx.restore();
+}
+
+/** Draws each line's traversed cells as a stroked path in the owner's
+ *  colour, displaced sideways by its assigned lane. Two players sharing a
+ *  cell are already separable by colour, but one player's line crossing the
+ *  same cell twice through different faces is one colour crossing itself --
+ *  a self-crossing pass scores twice, so without a lane offset its second
+ *  visit would draw exactly on top of the first and silently disappear. */
+export function drawLines(
+  ctx: CanvasRenderingContext2D,
+  layout: Layout,
+  lines: readonly LineView[],
+): void {
+  const laneOf = assignLanes([...lines]);
+  const laneCounts = new Map<string, number>();
+  for (const line of lines) {
+    for (const step of line.steps) {
+      const cell = `${step.row},${step.col}`;
+      laneCounts.set(cell, (laneCounts.get(cell) ?? 0) + 1);
+    }
+  }
+
+  const gap = Math.max(2, cellRect(layout, 0, 0).w * 0.14);
+  ctx.save();
+  ctx.lineWidth = Math.max(3, cellRect(layout, 0, 0).w * 0.1);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+
+  for (const line of lines) {
+    ctx.strokeStyle = PLAYER_COLOURS[line.owner % PLAYER_COLOURS.length]!;
+    line.steps.forEach((step, stepIndex) => {
+      const cell = `${step.row},${step.col}`;
+      const lane = laneOf.get(laneKey(line, stepIndex)) ?? 0;
+      const lanes = laneCounts.get(cell) ?? 1;
+      const [dx, dy] = offsetFor(step, lane, lanes, gap);
+      ctx.save();
+      ctx.translate(dx, dy);
+      drawConnection(ctx, cellRect(layout, step.row, step.col), step.entry, step.exit);
+      ctx.restore();
+    });
   }
   ctx.restore();
 }
