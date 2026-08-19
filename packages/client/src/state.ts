@@ -1,6 +1,8 @@
-import { config, markerDestination, offsetOf } from "@passtally/rules";
-import type { Move, Pos, TypeId } from "@passtally/rules";
+import { canPlace, config, markerDestination, offsetOf } from "@passtally/rules";
+import type { Board, Move, Pos, TypeId } from "@passtally/rules";
 import type { Hit } from "./geometry.js";
+import type { LineView } from "./lines.js";
+import { linesFor } from "./lines.js";
 import { normalizePlacement } from "./orient.js";
 import type { LocalSession } from "./session.js";
 import { Tentative } from "./tentative.js";
@@ -16,7 +18,8 @@ export type UiInput =
   | { kind: "rotate"; direction?: -1 | 1 }
   | { kind: "undo" }
   | { kind: "escape" }
-  | { kind: "commit" };
+  | { kind: "commit" }
+  | { kind: "hover"; cell: Pos | null };
 
 export type Destination = { slot: number; distance: number };
 
@@ -28,6 +31,7 @@ export class Controller {
   selectedPile: number | null = null;
   selectedMarker: number | null = null;
   ghostOrientation = 0;
+  hoveredCell: Pos | null = null;
   editingPlacementIndex: number | null = null;
   markerDestinations: Destination[] = [];
   lastRejection: string | null = null;
@@ -48,6 +52,28 @@ export class Controller {
 
   isSpent(pileIndex: number): boolean {
     return this.tentative.isSpent(pileIndex);
+  }
+
+  /** Completed lines to draw: every player's while a ghost hovers a legal
+   *  anchor, otherwise just the active player's. */
+  visibleLines(): LineView[] {
+    const view = this.view();
+    const board = this.tentative.overlayGame(this.editingPlacementIndex).board;
+    const players = this.ghostOnLegalAnchor(board)
+      ? view.players.map((_, index) => index)
+      : [view.currentPlayer];
+    return linesFor(board, view, players);
+  }
+
+  private ghostOnLegalAnchor(board: Board): boolean {
+    if (this.state !== "tileSelected" || this.hoveredCell === null) return false;
+    const pileIndex = this.selectedPile;
+    if (pileIndex === null) return false;
+    const typeId = this.view().piles[pileIndex]?.faceUp;
+    if (typeId == null) return false;
+    const [dr, dc] = offsetOf(this.ghostOrientation);
+    const cellB: Pos = [this.hoveredCell[0] + dr, this.hoveredCell[1] + dc];
+    return canPlace(board, this.hoveredCell, cellB);
   }
 
   get pendingActions(): number {
@@ -72,7 +98,10 @@ export class Controller {
   }
 
   handle(input: UiInput): void {
-    this.lastRejection = null;
+    // Hover is passive tracking, not a user action -- it fires on every
+    // pointer move, so it must not blank out a rejection from the action
+    // that preceded it.
+    if (input.kind !== "hover") this.lastRejection = null;
     try {
       this.dispatch(input);
     } catch (error) {
@@ -99,6 +128,11 @@ export class Controller {
     if (input.kind === "escape") {
       this.clearSelection();
       if (this.state !== "setup") this.state = "idle";
+      return;
+    }
+
+    if (input.kind === "hover") {
+      this.hoveredCell = input.cell;
       return;
     }
 

@@ -1,5 +1,6 @@
 import { Game } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
+import { controllerOn, scoringBoard } from "./fixtures.js";
 import { LocalSession } from "../src/session.js";
 import { Controller } from "../src/state.js";
 import { setupOrder } from "../src/view.js";
@@ -262,5 +263,36 @@ describe("undo, escape and commit", () => {
     current.handle({ kind: "undo" });
     current.handle({ kind: "selectPile", pileIndex: 0 });
     expect(current.state).toBe("tileSelected");
+  });
+});
+
+describe("visible lines", () => {
+  it("shows only the active player's lines when nothing is hovered", () => {
+    const c = controllerOn(scoringBoard());
+    expect(new Set(c.visibleLines().map((l) => l.owner))).toEqual(new Set([0]));
+  });
+
+  it("shows every player's lines while a ghost hovers a legal anchor", () => {
+    // Pile 0's default orientation (0 = south) is illegal everywhere on this
+    // board: rows 0-1 are already covered by three south-facing dominoes
+    // (any south span there exactly straddles one of them), and row 2 is the
+    // board's last row, so a south span from it runs out of bounds. Rotating
+    // once (orientation 1 = west) makes [2,2]-[2,1] a legal anchor in the
+    // otherwise-open row 2 -- see task-5-report.md for why this deviates
+    // from the brief's verbatim test body.
+    const c = controllerOn(scoringBoard());
+    c.handle({ kind: "selectPile", pileIndex: 0 });
+    c.handle({ kind: "rotate" });
+    c.handle({ kind: "hover", cell: [2, 2] });
+    expect(new Set(c.visibleLines().map((l) => l.owner)).size).toBeGreaterThan(1);
+  });
+
+  it("returns to the active player's lines when the ghost leaves", () => {
+    const c = controllerOn(scoringBoard());
+    c.handle({ kind: "selectPile", pileIndex: 0 });
+    c.handle({ kind: "rotate" });
+    c.handle({ kind: "hover", cell: [2, 2] });
+    c.handle({ kind: "hover", cell: null });
+    expect(new Set(c.visibleLines().map((l) => l.owner))).toEqual(new Set([0]));
   });
 });
