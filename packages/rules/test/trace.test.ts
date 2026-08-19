@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { emptyBoard, slotIndexOf } from "../src/board.js";
 import { placeTile } from "../src/placement.js";
-import { trace, traceFrom } from "../src/trace.js";
+import { trace, traceFrom, tracePath, tracePathFrom } from "../src/trace.js";
 import { Result, Side } from "../src/types.js";
 
 describe("trace", () => {
@@ -100,5 +100,66 @@ describe("trace", () => {
     // 1 ((1,1) first visit) + 1 ((0,1)/(0,2) tile, seam-crossed)
     // + 1 ((1,1) second visit, different face) + 1 ((2,1)/(3,1) tile) = 4
     expect(passes).toBe(4);
+  });
+});
+
+describe("tracePath", () => {
+  it("reports the same endpoint and passes as trace", () => {
+    const b = emptyBoard(3);
+    for (let col = 0; col < 3; col++) placeTile(b, [0, col], [1, col], 2, 0);
+    const start = slotIndexOf(3, 0, 0, Side.W);
+    const [endpoint, passes] = trace(b, start);
+    const path = tracePath(b, start);
+    expect(path.endpoint).toBe(endpoint);
+    expect(path.passes).toBe(passes);
+  });
+
+  it("reports one step per cell entered", () => {
+    const b = emptyBoard(3);
+    for (let col = 0; col < 3; col++) placeTile(b, [0, col], [1, col], 2, 0);
+    const path = tracePath(b, slotIndexOf(3, 0, 0, Side.W));
+    expect(path.steps.map((s) => [s.row, s.col])).toEqual([[0, 0], [0, 1], [0, 2]]);
+    expect(path.steps.every((s) => s.entry === Side.W && s.exit === Side.E)).toBe(true);
+  });
+
+  it("carries placementId and height on every step", () => {
+    const b = emptyBoard(3);
+    const pid = placeTile(b, [0, 0], [1, 0], 2, 0);
+    const path = tracePath(b, slotIndexOf(3, 0, 0, Side.W));
+    const first = path.steps[0]!;
+    expect(first.placementId).toBe(pid);
+    expect(first.height).toBe(1);
+  });
+
+  // An uncovered cell is a printed cross path: it routes straight through and
+  // contributes nothing, which is what distinguishes it from a placed tile.
+  it("marks uncovered cells with a null placementId and zero height", () => {
+    const b = emptyBoard(3);
+    const path = tracePath(b, slotIndexOf(3, 1, 0, Side.W));
+    expect(path.steps.length).toBe(3);
+    expect(path.steps.every((s) => s.placementId === null && s.height === 0)).toBe(true);
+    expect(path.passes).toBe(0);
+  });
+
+  it("records both visits when a line crosses one tile twice", () => {
+    const b = emptyBoard(3);
+    placeTile(b, [1, 1], [1, 0], 1, 1);
+    placeTile(b, [0, 1], [0, 0], 1, 1);
+    const path = tracePath(b, slotIndexOf(3, 1, 0, Side.W));
+    const visits = path.steps.filter((s) => s.row === 1 && s.col === 0);
+    expect(path.passes).toBe(3);
+    // The same physical tile appears on more than one step.
+    const ids = path.steps.map((s) => s.placementId).filter((id) => id !== null);
+    expect(new Set(ids).size).toBeLessThan(ids.length);
+    expect(visits.length).toBeGreaterThan(0);
+  });
+
+  it("returns the steps walked before a loop is detected", () => {
+    const b = emptyBoard(4);
+    placeTile(b, [1, 2], [1, 1], 1, 1);
+    placeTile(b, [2, 1], [2, 2], 1, 3);
+    const path = tracePathFrom(b, 1, 1, Side.E);
+    expect(path.endpoint).toBe(Result.LOOP);
+    expect(path.steps.length).toBeGreaterThan(0);
   });
 });
