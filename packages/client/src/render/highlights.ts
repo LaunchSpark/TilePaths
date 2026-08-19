@@ -1,12 +1,12 @@
+import type { TracedPath } from "@passtally/rules";
 import type { Layout } from "../geometry.js";
 import { cellRect } from "../geometry.js";
-import type { HighlightedPath } from "../path-highlight.js";
 import { drawConnection } from "./tiles.js";
 
 export function drawPathHighlights(
   ctx: CanvasRenderingContext2D,
   layout: Layout,
-  paths: readonly HighlightedPath[],
+  paths: readonly TracedPath[],
 ): void {
   const drawn = new Set<string>();
   ctx.save();
@@ -16,17 +16,17 @@ export function drawPathHighlights(
   ctx.lineJoin = "round";
 
   for (const path of paths) {
-    for (const segment of path.segments) {
-      const lo = Math.min(segment.entry, segment.exit);
-      const hi = Math.max(segment.entry, segment.exit);
-      const key = `${segment.row},${segment.col},${lo},${hi}`;
+    for (const step of path.steps) {
+      const lo = Math.min(step.entry, step.exit);
+      const hi = Math.max(step.entry, step.exit);
+      const key = `${step.row},${step.col},${lo},${hi}`;
       if (drawn.has(key)) continue;
       drawn.add(key);
       drawConnection(
         ctx,
-        cellRect(layout, segment.row, segment.col),
-        segment.entry,
-        segment.exit,
+        cellRect(layout, step.row, step.col),
+        step.entry,
+        step.exit,
       );
     }
   }

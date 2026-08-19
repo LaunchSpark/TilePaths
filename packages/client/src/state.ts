@@ -22,7 +22,7 @@ export type Destination = { slot: number; distance: number };
 
 export class Controller {
   readonly session: LocalSession;
-  private tentative: Tentative;
+  readonly tentative: Tentative;
 
   state: UiState = "setup";
   selectedPile: number | null = null;

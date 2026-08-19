@@ -1,8 +1,7 @@
 import { offsetOf } from "@passtally/rules";
-import type { TypeId } from "@passtally/rules";
+import type { TracedPath, TypeId } from "@passtally/rules";
 import { cellRect, slotRect, unit } from "../geometry.js";
 import type { Layout, Rect } from "../geometry.js";
-import type { HighlightedPath } from "../path-highlight.js";
 import type { Controller } from "../state.js";
 import type { GameView } from "../types.js";
 import { drawPathHighlights } from "./highlights.js";
@@ -36,7 +35,7 @@ export function drawBoard(
   controller: Controller,
   view: GameView,
   hoverCell: [number, number] | null,
-  highlighted: readonly HighlightedPath[] = [],
+  highlighted: readonly TracedPath[] = [],
 ): void {
   const size = unit(layout);
 

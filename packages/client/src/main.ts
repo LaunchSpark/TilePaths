@@ -56,7 +56,7 @@ function currentGhost(): GhostPlacement | null {
 }
 
 function drawBoardFrame(): void {
-  const highlighted = pathHighlightCache.get(renderedView, {
+  const highlighted = pathHighlightCache.get(controller.tentative, {
     hoveredSlot: hoverSlot,
     ghost: currentGhost(),
   }, boardRevision);
