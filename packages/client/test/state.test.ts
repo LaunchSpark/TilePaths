@@ -295,4 +295,16 @@ describe("visible lines", () => {
     c.handle({ kind: "hover", cell: null });
     expect(new Set(c.visibleLines().map((l) => l.owner))).toEqual(new Set([0]));
   });
+
+  it("stays on the active player's lines while hovering an illegal anchor", () => {
+    // Orientation 0 (south) from [2,2] gives cellB=[3,2], off-board on this
+    // 3x3 board -- canPlace rejects it. This is the exact anchor the brief
+    // originally hovered thinking it was legal; here it's used deliberately
+    // as an illegal one, to prove visibleLines actually gates on canPlace
+    // rather than on "a pile is selected and something is hovered."
+    const c = controllerOn(scoringBoard());
+    c.handle({ kind: "selectPile", pileIndex: 0 });
+    c.handle({ kind: "hover", cell: [2, 2] });
+    expect(new Set(c.visibleLines().map((l) => l.owner))).toEqual(new Set([0]));
+  });
 });

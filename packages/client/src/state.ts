@@ -7,6 +7,7 @@ import { normalizePlacement } from "./orient.js";
 import type { LocalSession } from "./session.js";
 import { Tentative } from "./tentative.js";
 import type { GameView, TurnResult } from "./types.js";
+import { buildView } from "./view.js";
 
 export type UiState =
   | "setup" | "idle" | "tileSelected" | "markerSelected" | "committing" | "gameOver";
@@ -57,19 +58,31 @@ export class Controller {
   /** Completed lines to draw: every player's while a ghost hovers a legal
    *  anchor, otherwise just the active player's. */
   visibleLines(): LineView[] {
-    const view = this.view();
-    const board = this.tentative.overlayGame(this.editingPlacementIndex).board;
-    const players = this.ghostOnLegalAnchor(board)
+    const { view, board } = this.viewAndBoard();
+    const players = this.ghostOnLegalAnchor(view, board)
       ? view.players.map((_, index) => index)
       : [view.currentPlayer];
     return linesFor(board, view, players);
   }
 
-  private ghostOnLegalAnchor(board: Board): boolean {
+  /** Same {view, board} pair `view()` already computes, but returns the raw
+   *  board alongside it -- one overlay clone-and-replay instead of the two
+   *  (or three, counting ghostOnLegalAnchor's own `view()` call) separate
+   *  ones `visibleLines()` used to trigger on every render. */
+  private viewAndBoard(): { view: GameView; board: Board } {
+    if (this.state === "setup") {
+      return { view: this.session.getView(), board: this.session.game.board };
+    }
+    const board = this.tentative.overlayGame(this.editingPlacementIndex).board;
+    const view = buildView(this.session.game, { board, actionsLeft: this.tentative.actionsLeft() });
+    return { view, board };
+  }
+
+  private ghostOnLegalAnchor(view: GameView, board: Board): boolean {
     if (this.state !== "tileSelected" || this.hoveredCell === null) return false;
     const pileIndex = this.selectedPile;
     if (pileIndex === null) return false;
-    const typeId = this.view().piles[pileIndex]?.faceUp;
+    const typeId = view.piles[pileIndex]?.faceUp;
     if (typeId == null) return false;
     const [dr, dc] = offsetOf(this.ghostOrientation);
     const cellB: Pos = [this.hoveredCell[0] + dr, this.hoveredCell[1] + dc];
