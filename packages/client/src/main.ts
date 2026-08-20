@@ -275,12 +275,12 @@ canvas.addEventListener("pointerup", (event) => {
 
 canvas.addEventListener("pointercancel", (event) => {
   if (event.pointerId !== boardDragPointer) return;
-  boardDragPointer = null;
-  endDragPreview();
-  setHoverCell(null);
-  hoverSlot = null;
-  hoverPoint = null;
-  controller.handleAndRender({ kind: "escape" });
+  // Same abnormal-drag-end case the Escape key handles (the browser ending
+  // the gesture out from under us, common with touch/pen) -- route through
+  // the same cancelBoardDragForReturn + returnPlacement path so a pending
+  // reposition is actually returned to its pile, not left silently placed.
+  cancelBoardDragForReturn();
+  controller.handleAndRender({ kind: "returnPlacement" });
 });
 
 canvas.addEventListener("mouseleave", () => {
