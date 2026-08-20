@@ -1,4 +1,5 @@
 import { config, passesToVp } from "@passtally/rules";
+import type { Pos } from "@passtally/rules";
 import type { LineView } from "../lines.js";
 import type { Controller } from "../state.js";
 
@@ -28,6 +29,45 @@ export function tilesInLine(line: LineView): TileContribution[] {
     tiles.push({ placementId: step.placementId, level: step.height, passes: step.height });
   }
   return tiles;
+}
+
+export type CellCrossing = { owner: number; slots: [number, number]; passes: number };
+
+/** Which of `lines` cross `cell`, and how many passes each contributes there.
+ *  Groups each line's steps into consecutive-run crossings the same way
+ *  `tilesInLine` does (a "crossing" is one run of same-`placementId` steps,
+ *  worth `height` passes), then keeps only the runs that touch `cell`. A tile
+ *  occupies two board cells, so both halves of the same run report the same
+ *  passes; a line that leaves a tile and later crosses it again produces two
+ *  separate entries here, mirroring `tilesInLine`'s own run boundary rule. */
+export function crossingsAt(cell: Pos, lines: readonly LineView[]): CellCrossing[] {
+  const [cellRow, cellCol] = cell;
+  const crossings: CellCrossing[] = [];
+  for (const line of lines) {
+    let runId: number | null = null;
+    let runHeight = 0;
+    let runTouches = false;
+    const flush = () => {
+      if (runTouches) crossings.push({ owner: line.owner, slots: line.slots, passes: runHeight });
+    };
+    for (const step of line.steps) {
+      if (step.placementId === null) {
+        flush();
+        runId = null;
+        runTouches = false;
+        continue;
+      }
+      if (step.placementId !== runId) {
+        flush();
+        runId = step.placementId;
+        runHeight = step.height;
+        runTouches = false;
+      }
+      if (step.row === cellRow && step.col === cellCol) runTouches = true;
+    }
+    flush();
+  }
+  return crossings;
 }
 
 const CURVE_WIDTH = 176;

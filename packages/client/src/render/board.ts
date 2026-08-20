@@ -4,6 +4,7 @@ import { cellRect, slotRect, unit } from "../geometry.js";
 import type { Layout, Rect } from "../geometry.js";
 import type { Controller } from "../state.js";
 import type { GameView } from "../types.js";
+import { crossingsAt } from "./breakdown.js";
 import { drawPathHighlights } from "./highlights.js";
 import { drawCellArt, levelFill } from "./tiles.js";
 
@@ -181,4 +182,55 @@ export function drawBoard(
   }
 
   drawPathHighlights(ctx, layout, highlighted);
+
+  if (hoverCell !== null) drawHoverReadout(ctx, layout, view, controller, hoverCell);
+}
+
+/** Reports the hovered cell's level and, when it sits on a visible line, how
+ *  many passes it contributes there and to whose lines. Tier 1 already badges
+ *  any tile at level >= 2, so a bare level number would be redundant on its
+ *  own -- the per-line contribution is the part a badge can't show. Driven
+ *  entirely by `controller.hoveredCell` (passed in as `hoverCell`) and
+ *  `controller.visibleLines()`, the same completed-line set already drawn by
+ *  `drawLines`/`drawPassBadges`, so this adds no new tracing of its own. */
+function drawHoverReadout(
+  ctx: CanvasRenderingContext2D,
+  layout: Layout,
+  view: GameView,
+  controller: Controller,
+  hoverCell: [number, number],
+): void {
+  const [row, col] = hoverCell;
+  if (row < 0 || col < 0 || row >= view.n || col >= view.n) return;
+  const level = view.cells[row]![col]!.height;
+
+  const lines = [`Level ${level}`];
+  for (const crossing of crossingsAt(hoverCell, controller.visibleLines())) {
+    const passWord = crossing.passes === 1 ? "pass" : "passes";
+    lines.push(
+      `P${crossing.owner + 1} line ${crossing.slots[0]}–${crossing.slots[1]}: `
+      + `${crossing.passes} ${passWord}`,
+    );
+  }
+
+  const font = "12px sans-serif";
+  const lineHeight = 15;
+  const padX = 8;
+  const padY = 6;
+  ctx.save();
+  ctx.font = font;
+  const textWidth = Math.max(...lines.map((text) => ctx.measureText(text).width));
+  const boxW = textWidth + padX * 2;
+  const boxH = lines.length * lineHeight + padY * 2;
+  const boxX = layout.originX + 4;
+  const boxY = layout.originY + 4;
+
+  ctx.fillStyle = "rgba(27, 27, 27, 0.85)";
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.fillStyle = "#f6f3ec";
+  ctx.textBaseline = "top";
+  lines.forEach((text, index) => {
+    ctx.fillText(text, boxX + padX, boxY + padY + index * lineHeight);
+  });
+  ctx.restore();
 }

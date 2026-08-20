@@ -2,7 +2,7 @@ import { Side, slotIndexOf, tracePath } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
 import { emptyPlay, scoringBoard, selfCrossingBoard, stackedBoard } from "./fixtures.js";
 import { linesFor } from "../src/lines.js";
-import { tilesInLine } from "../src/render/breakdown.js";
+import { crossingsAt, tilesInLine } from "../src/render/breakdown.js";
 import { buildView } from "../src/view.js";
 
 describe("linesFor", () => {
@@ -107,5 +107,56 @@ describe("tilesInLine", () => {
     expect(tiles.length).toBe(1);
     expect(tiles[0]!.level).toBe(2);
     expect(tiles[0]!.passes).toBe(2);
+  });
+});
+
+// Backs the hover readout (Task 8): which visible lines cross a given board
+// cell, and how many passes each contributes there. Real branching logic
+// (run grouping plus a position filter), so -- unlike the DOM/canvas code
+// that consumes it -- it gets a unit test of its own.
+describe("crossingsAt", () => {
+  it("reports the owner and per-run passes for a cell the line crosses", () => {
+    const g = scoringBoard();
+    const line = linesFor(g.board, buildView(g), [0])[0]!;
+    expect(crossingsAt([0, 0], [line])).toEqual([{ owner: 0, slots: [3, 11], passes: 1 }]);
+  });
+
+  it("returns nothing for a cell the line never touches", () => {
+    const g = scoringBoard();
+    const line = linesFor(g.board, buildView(g), [0])[0]!;
+    expect(crossingsAt([2, 0], [line])).toEqual([]);
+  });
+
+  // selfCrossingBoard's tile at placementId 1 spans (1,0) and (1,1), but the
+  // path visits them on two separate runs (see tilesInLine's own test above)
+  // -- each half must therefore report its OWN run's passes, not get merged
+  // into one entry the way a single contiguous run would.
+  it("keeps a tile's two separate returning crossings as separate per-cell entries", () => {
+    const g = selfCrossingBoard();
+    const path = tracePath(g.board, slotIndexOf(3, 1, 0, Side.W));
+    const line = { owner: 0, slots: [0, 0] as [number, number],
+                   passes: path.passes, steps: path.steps };
+    expect(crossingsAt([1, 0], [line])).toEqual([{ owner: 0, slots: [0, 0], passes: 1 }]);
+    expect(crossingsAt([1, 1], [line])).toEqual([{ owner: 0, slots: [0, 0], passes: 1 }]);
+  });
+
+  // placementId 2 in that same fixture spans (0,0) and (0,1) as a single
+  // contiguous run -- both halves of that ONE crossing must report the same
+  // passes, since they are the same physical tile crossing, not two.
+  it("reports the same passes at both halves of one contiguous run", () => {
+    const g = selfCrossingBoard();
+    const path = tracePath(g.board, slotIndexOf(3, 1, 0, Side.W));
+    const line = { owner: 0, slots: [0, 0] as [number, number],
+                   passes: path.passes, steps: path.steps };
+    expect(crossingsAt([0, 0], [line])).toEqual(crossingsAt([0, 1], [line]));
+  });
+
+  it("lists every owner whose line crosses a shared cell", () => {
+    const g = scoringBoard();
+    const lines = linesFor(g.board, buildView(g), [0, 1]);
+    const shared = lines.find((l) => l.owner === 0)!;
+    const other = { ...lines.find((l) => l.owner === 1)!, steps: shared.steps };
+    const crossings = crossingsAt([shared.steps[0]!.row, shared.steps[0]!.col], [shared, other]);
+    expect(crossings.map((c) => c.owner).sort()).toEqual([0, 1]);
   });
 });
