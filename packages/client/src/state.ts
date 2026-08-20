@@ -66,6 +66,16 @@ export class Controller {
     return linesFor(board, view, players);
   }
 
+  /** One player's current lines -- the same {view, board} pair
+   *  `visibleLines()` uses (so a mid-turn ghost placement's lines preview the
+   *  same way here), but for a single player regardless of whose turn it is.
+   *  Used by the breakdown popover, which explains the present position, not
+   *  history. */
+  linesForPlayer(player: number): LineView[] {
+    const { view, board } = this.viewAndBoard();
+    return linesFor(board, view, [player]);
+  }
+
   /** Same {view, board} pair `view()` already computes, but returns the raw
    *  board alongside it -- one overlay clone-and-replay instead of the two
    *  (or three, counting ghostOnLegalAnchor's own `view()` call) separate

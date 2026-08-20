@@ -1,6 +1,8 @@
+import { Side, slotIndexOf, tracePath } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
-import { emptyPlay, scoringBoard } from "./fixtures.js";
+import { emptyPlay, scoringBoard, selfCrossingBoard } from "./fixtures.js";
 import { linesFor } from "../src/lines.js";
+import { tilesInLine } from "../src/render/breakdown.js";
 import { buildView } from "../src/view.js";
 
 describe("linesFor", () => {
@@ -35,5 +37,60 @@ describe("linesFor", () => {
   it("asks only for the players requested", () => {
     const g = scoringBoard();
     expect(linesFor(g.board, buildView(g), [1]).map((l) => l.owner)).toEqual([1]);
+  });
+});
+
+describe("tilesInLine", () => {
+  it("groups consecutive steps by placement and reports level", () => {
+    const g = scoringBoard();
+    const line = linesFor(g.board, buildView(g), [0])[0]!;
+    const tiles = tilesInLine(line);
+    expect(tiles.length).toBe(3);
+    expect(tiles.every((t) => t.level === 1 && t.passes === 1)).toBe(true);
+  });
+
+  // Built from tracePath directly rather than from linesFor: tilesInLine takes
+  // a LineView, and this board has no markers, so requiring a completed line
+  // would mean inventing marker positions to make the fixture connect.
+  it("counts a tile crossed twice as two entries", () => {
+    const g = selfCrossingBoard();
+    const path = tracePath(g.board, slotIndexOf(3, 1, 0, Side.W));
+    const line = { owner: 0, slots: [0, 0] as [number, number],
+                   passes: path.passes, steps: path.steps };
+    const ids = tilesInLine(line).map((t) => t.placementId);
+    expect(new Set(ids).size).toBeLessThan(ids.length);
+  });
+
+  it("omits uncovered cells, which contribute nothing", () => {
+    const g = emptyPlay();
+    const line = { owner: 0, slots: [0, 0] as [number, number], passes: 0,
+                   steps: tracePath(g.board, 0).steps };
+    expect(tilesInLine(line)).toEqual([]);
+  });
+
+  // selfCrossingBoard's middle tile (placementId 2) is entered and crossed
+  // through both of its cells before the line moves on -- two PathSteps, one
+  // physical tile. A per-step enumeration would report 5 entries here (one
+  // per step); real grouping reports 3 (three runs: id 1, id 2, id 1 again).
+  it("distinguishes real grouping from per-step enumeration", () => {
+    const g = selfCrossingBoard();
+    const path = tracePath(g.board, slotIndexOf(3, 1, 0, Side.W));
+    const line = { owner: 0, slots: [0, 0] as [number, number],
+                   passes: path.passes, steps: path.steps };
+    expect(path.steps.length).toBe(5);
+    expect(tilesInLine(line).length).toBeLessThan(path.steps.length);
+  });
+
+  it("keeps a returning crossing as its own run rather than merging by id", () => {
+    const g = selfCrossingBoard();
+    const path = tracePath(g.board, slotIndexOf(3, 1, 0, Side.W));
+    const line = { owner: 0, slots: [0, 0] as [number, number],
+                   passes: path.passes, steps: path.steps };
+    const tiles = tilesInLine(line);
+    // Naive group-by-id would merge the two runs sharing a placementId into
+    // one entry; consecutive-run grouping keeps them separate.
+    const total = tiles.reduce((sum, t) => sum + t.passes, 0);
+    expect(total).toBe(line.passes);
+    expect(tiles.length).toBeGreaterThan(new Set(tiles.map((t) => t.placementId)).size);
   });
 });

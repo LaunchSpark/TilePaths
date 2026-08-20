@@ -84,6 +84,27 @@ body {
 .player { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
 .player.active { font-weight: 700; }
 .swatch { width: 12px; height: 12px; border-radius: 50%; }
+.player .score { cursor: default; }
+.player .score:hover { text-decoration: underline dotted; }
+
+.breakdown {
+  position: fixed;
+  z-index: 30;
+  width: 260px;
+  background: var(--paper);
+  border: 1px solid var(--edge);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.breakdown.hidden { display: none; }
+.breakdown h3 { margin: 0 0 6px; font-size: 13px; }
+.breakdown-empty { color: #665f52; margin: 0 0 6px; }
+.breakdown-line { margin-bottom: 6px; }
+.breakdown-line-header { font-weight: 600; }
+.breakdown ul { margin: 2px 0 4px; padding-left: 1.2em; }
+.breakdown-total { font-weight: 700; margin: 6px 0 4px; }
+.vp-curve { display: block; margin-top: 2px; }
 
 .shake { animation: shake 220ms; }
 @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }

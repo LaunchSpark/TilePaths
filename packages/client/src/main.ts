@@ -24,6 +24,7 @@ const canvas = document.querySelector<HTMLCanvasElement>("#board")!;
 const ctx = canvas.getContext("2d")!;
 const trayRoot = document.querySelector<HTMLElement>("#piles")!;
 const playersRoot = document.querySelector<HTMLElement>("#players")!;
+const breakdownRoot = document.querySelector<HTMLElement>("#breakdown")!;
 const logRoot = document.querySelector<HTMLElement>("#log")!;
 const actionsLabel = document.querySelector<HTMLElement>("#actions")!;
 const rotateLeftButton = document.querySelector<HTMLButtonElement>("#rotate-left")!;
@@ -118,7 +119,7 @@ function render(): void {
     },
   });
   rotateDragPreview(controller.ghostOrientation);
-  renderPlayers(playersRoot, controller);
+  renderPlayers(playersRoot, breakdownRoot, controller);
   renderLog(logRoot, controller);
 
   actionsLabel.textContent = view.phase === "setup"
