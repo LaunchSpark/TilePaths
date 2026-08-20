@@ -40,6 +40,24 @@ export function selfCrossingBoard(): Game {
   return g;
 }
 
+/** A 4x4 board with one level-2 tile: two level-1 "support" dominoes
+ *  (different placement ids, equal height) sit under a third domino placed
+ *  across both of them. `canPlace`'s support rule (equal height, different
+ *  placement id underneath) makes this legal; the top tile's conns
+ *  completely replace the supports' -- a line entering row 0 stays on the
+ *  top tile and never dips into row 1.
+ *
+ *  Tracing from slotIndexOf(4, 0, 0, Side.W) crosses the level-2 tile (both
+ *  its cells, one placement id, one run) for 2 passes, then two uncovered
+ *  cross cells for zero more -- 2 passes total. */
+export function stackedBoard(): Game {
+  const g = Game.newGame(2, 1, 4);
+  placeTile(g.board, [0, 0], [1, 0], 2, 0); // support A
+  placeTile(g.board, [0, 1], [1, 1], 2, 0); // support B, different placement id
+  placeTile(g.board, [0, 0], [0, 1], 2, 3); // stacks across both -> row 0 now height 2
+  return g;
+}
+
 /** A Controller driving a LocalSession over the given game. */
 export function controllerOn(game: Game): Controller {
   return new Controller(new LocalSession(game));

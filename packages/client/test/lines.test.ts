@@ -1,6 +1,6 @@
 import { Side, slotIndexOf, tracePath } from "@passtally/rules";
 import { describe, expect, it } from "vitest";
-import { emptyPlay, scoringBoard, selfCrossingBoard } from "./fixtures.js";
+import { emptyPlay, scoringBoard, selfCrossingBoard, stackedBoard } from "./fixtures.js";
 import { linesFor } from "../src/lines.js";
 import { tilesInLine } from "../src/render/breakdown.js";
 import { buildView } from "../src/view.js";
@@ -92,5 +92,20 @@ describe("tilesInLine", () => {
     const total = tiles.reduce((sum, t) => sum + t.passes, 0);
     expect(total).toBe(line.passes);
     expect(tiles.length).toBeGreaterThan(new Set(tiles.map((t) => t.placementId)).size);
+  });
+
+  // Every fixture above places only level-1 tiles, so `level`/`passes` being
+  // right could just mean the field is hardcoded to 1. stackedBoard() has a
+  // real level-2 tile (two level-1 dominoes supporting a third stacked
+  // across them); crossing it must report level 2 and 2 passes, not 1.
+  it("reads the tile's real height rather than assuming level 1", () => {
+    const g = stackedBoard();
+    const path = tracePath(g.board, slotIndexOf(4, 0, 0, Side.W));
+    const line = { owner: 0, slots: [0, 0] as [number, number],
+                   passes: path.passes, steps: path.steps };
+    const tiles = tilesInLine(line);
+    expect(tiles.length).toBe(1);
+    expect(tiles[0]!.level).toBe(2);
+    expect(tiles[0]!.passes).toBe(2);
   });
 });
