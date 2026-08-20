@@ -46,6 +46,29 @@ let boardDragStart: [number, number] = [0, 0];
 let boardDragMoved = false;
 let suppressBoardClick = false;
 
+/** End a held pending-tile drag without allowing its eventual pointer release
+ * to place the tile again. The controller separately removes the tentative
+ * placement, which restores both its pile and action. */
+function cancelBoardDragForReturn(): boolean {
+  const pointerId = boardDragPointer;
+  if (pointerId === null) return false;
+  if (canvas.hasPointerCapture(pointerId)) canvas.releasePointerCapture(pointerId);
+  boardDragPointer = null;
+  boardDragMoved = false;
+  endDragPreview();
+  setHoverCell(null);
+  hoverSlot = null;
+  hoverPoint = null;
+
+  // A click is normally synthesized after the still-held pointer is released.
+  // Keep it suppressed through that release, then reset for the next gesture.
+  suppressBoardClick = true;
+  window.addEventListener("pointerup", () => {
+    window.setTimeout(() => { suppressBoardClick = false; }, 0);
+  }, { once: true });
+  return true;
+}
+
 // The hovered board cell now lives on the controller (see the "hover" UiInput)
 // rather than as module-local state, so Controller.visibleLines() can react
 // to it: every player's completed lines are shown while a ghost hovers a
@@ -323,8 +346,13 @@ window.addEventListener("keydown", (event) => {
     event.preventDefault();
     controller.handleAndRender({ kind: "rotate" });
   } else if (key === "escape") {
-    endDragPreview();
-    controller.handleAndRender({ kind: "escape" });
+    event.preventDefault();
+    if (cancelBoardDragForReturn()) {
+      controller.handleAndRender({ kind: "returnPlacement" });
+    } else {
+      endDragPreview();
+      controller.handleAndRender({ kind: "escape" });
+    }
   } else if (key === "backspace") {
     event.preventDefault();
     controller.handleAndRender({ kind: "undo" });

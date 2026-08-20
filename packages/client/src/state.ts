@@ -19,6 +19,7 @@ export type UiInput =
   | { kind: "rotate"; direction?: -1 | 1 }
   | { kind: "undo" }
   | { kind: "escape" }
+  | { kind: "returnPlacement" }
   | { kind: "commit" }
   | { kind: "hover"; cell: Pos | null };
 
@@ -187,6 +188,15 @@ export class Controller {
     if (this.state === "gameOver") return;
 
     if (input.kind === "escape") {
+      this.clearSelection();
+      if (this.state !== "setup") this.state = "idle";
+      return;
+    }
+
+    if (input.kind === "returnPlacement") {
+      if (this.editingPlacementIndex !== null) {
+        this.tentative.remove(this.editingPlacementIndex);
+      }
       this.clearSelection();
       if (this.state !== "setup") this.state = "idle";
       return;

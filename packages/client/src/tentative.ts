@@ -67,6 +67,16 @@ export class Tentative {
     this.pending = next;
   }
 
+  /** Remove one tentative action while preserving the validity of everything
+   * else in the turn. Used when a pending tile is returned to its pile. */
+  remove(index: number): void {
+    if (index < 0 || index >= this.pending.length) throw new Error("no pending move to remove");
+    const next = this.pending.filter((_, moveIndex) => moveIndex !== index);
+    const trial = this.session.game.clone();
+    for (const pending of next) trial.apply(pending);
+    this.pending = next;
+  }
+
   undo(): void {
     this.pending.pop();
   }

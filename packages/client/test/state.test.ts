@@ -137,6 +137,23 @@ describe("placing a tile", () => {
     expect(current.view().actionsLeft).toBe(1);
   });
 
+  it("returns a grabbed uncommitted tile to its pile", () => {
+    const current = controller();
+    driveSetup(current);
+    current.handle({ kind: "selectPile", pileIndex: 0 });
+    current.handle({ kind: "click", hit: { kind: "cell", row: 2, col: 2 } });
+    expect(current.isSpent(0)).toBe(true);
+
+    expect(current.beginReposition(2, 2)).toBe(true);
+    current.handle({ kind: "returnPlacement" });
+
+    expect(current.state).toBe("idle");
+    expect(current.pendingActions).toBe(0);
+    expect(current.view().actionsLeft).toBe(2);
+    expect(current.view().cells[2]![2]!.height).toBe(0);
+    expect(current.isSpent(0)).toBe(false);
+  });
+
   it("refuses a pile already spent this turn", () => {
     const current = controller();
     driveSetup(current);
